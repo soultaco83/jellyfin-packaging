@@ -91,4 +91,24 @@ jobs:
           
           echo "Pushing multi-arch manifest"
           docker manifest push "${MANIFEST_NAME}"
+
+      - name: Tag and Push Latest
+        run: |
+          SOURCE_IMAGE="soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}-amd64"
+          LATEST_IMAGE="soultaco83/jellyfin_with_request:latest"
           
+          echo "Tagging ${SOURCE_IMAGE} as latest"
+          docker tag "${SOURCE_IMAGE}" "${LATEST_IMAGE}"
+          
+          echo "Pushing latest image"
+          docker push "${LATEST_IMAGE}"
+
+      - name: Create and Push Latest Multi-Arch Manifest
+        run: |
+          LATEST_MANIFEST="soultaco83/jellyfin_with_request:latest"
+          echo "Creating latest multi-arch manifest"
+          docker manifest create "${LATEST_MANIFEST}" \
+            "soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}-amd64"
+          
+          echo "Pushing latest multi-arch manifest"
+          docker manifest push "${LATEST_MANIFEST}"
