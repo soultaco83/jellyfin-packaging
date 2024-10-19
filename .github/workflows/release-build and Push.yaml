@@ -22,17 +22,18 @@ jobs:
       - name: "Set version and release type"
         id: version
         run: |
-          if [[ "${{ inputs.version || 'master' }}" == "master" ]]; then
+          INPUT_VERSION=${{ inputs.version || 'master' }}
+          if [[ "$INPUT_VERSION" == "master" ]]; then
             echo "JELLYFIN_VERSION=$(date +'%Y%m%d%H')" >> $GITHUB_ENV
             echo "JELLYFIN_RELEASE_TYPE=unstable" >> $GITHUB_ENV
-          elif [[ "${{ inputs.version || 'master' }}" =~ ^v[0-9]+ ]]; then
-            echo "JELLYFIN_VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+          elif [[ "$INPUT_VERSION" =~ ^v[0-9]+ ]]; then
+            echo "JELLYFIN_VERSION=$INPUT_VERSION" >> $GITHUB_ENV
             echo "JELLYFIN_RELEASE_TYPE=stable" >> $GITHUB_ENV
           else
             echo "Invalid version input"
             exit 1
           fi
-          echo "Input version: ${{ inputs.version || 'master' }}"
+          echo "Input version: $INPUT_VERSION"
           echo "Set JELLYFIN_VERSION: ${{ env.JELLYFIN_VERSION }}"
           echo "Set JELLYFIN_RELEASE_TYPE: ${{ env.JELLYFIN_RELEASE_TYPE }}"
 
@@ -87,4 +88,5 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         uses: Ilshidur/action-discord@master
         with:
-          args: 'The workflow "Release Build and Push to DockerHub" has failed! Check the logs for more information. Input version: ${{ inputs.version || "master" }}, Set JELLYFIN_VERSION: ${{ env.JELLYFIN_VERSION }}'
+          args: The workflow "Release Build and Push to DockerHub" has failed! Check the logs for more information. Input version - ${{ inputs.version || 'master' }}, Set JELLYFIN_VERSION - ${{ env.JELLYFIN_VERSION }}
+          
