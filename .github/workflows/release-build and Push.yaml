@@ -56,7 +56,7 @@ jobs:
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |-
-          sudo --preserve-env ./build.py ${{ env.JELLYFIN_VERSION }} docker
+          sudo --preserve-env ./build.py ${{ env.JELLYFIN_VERSION }} docker amd64 --local
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v1
