@@ -69,7 +69,7 @@ jobs:
 
       - name: Push to Docker Hub
         run: |
-          ARCHITECTURES=("amd64" "arm64" "armhf")
+          ARCHITECTURES=("amd64")
           for ARCH in "${ARCHITECTURES[@]}"; do
             SOURCE_IMAGE="soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}-${ARCH}"
             
