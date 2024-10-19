@@ -18,18 +18,23 @@ permissions:
 jobs:
   Docker:
     runs-on: ubuntu-22.04
-    continue-on-error: false  # true in prod, false for testing
     steps:
-      - name: "Set dated version for unstable builds"
+      - name: "Set version and release type"
         id: version
-        run: |-
-          if grep --silent --extended-regexp '^v[0-9]+' <<< "${{ inputs.version || 'master' }}"; then
+        run: |
+          if [[ "${{ inputs.version || 'master' }}" == "master" ]]; then
+            echo "JELLYFIN_VERSION=$(date +'%Y%m%d%H')" >> $GITHUB_ENV
+            echo "JELLYFIN_RELEASE_TYPE=unstable" >> $GITHUB_ENV
+          elif [[ "${{ inputs.version || 'master' }}" =~ ^v[0-9]+ ]]; then
             echo "JELLYFIN_VERSION=${{ inputs.version }}" >> $GITHUB_ENV
             echo "JELLYFIN_RELEASE_TYPE=stable" >> $GITHUB_ENV
           else
-            echo "JELLYFIN_VERSION=$(date +'%Y%m%d%H')" >> $GITHUB_ENV
-            echo "JELLYFIN_RELEASE_TYPE=unstable" >> $GITHUB_ENV
+            echo "Invalid version input"
+            exit 1
           fi
+          echo "Input version: ${{ inputs.version || 'master' }}"
+          echo "Set JELLYFIN_VERSION: ${{ env.JELLYFIN_VERSION }}"
+          echo "Set JELLYFIN_RELEASE_TYPE: ${{ env.JELLYFIN_RELEASE_TYPE }}"
 
       - name: "Install dependencies"
         run: |-
@@ -58,15 +63,28 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: "Debug: List Docker images"
+        run: docker images
+
       - name: Push to Docker Hub
         run: |
-          docker tag jellyfin/jellyfin:${{ env.JELLYFIN_VERSION }} ${{ secrets.DOCKER_USERNAME }}/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}
-          docker push ${{ secrets.DOCKER_USERNAME }}/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}
-          
+          echo "Attempting to tag and push image with version: ${{ env.JELLYFIN_VERSION }}"
+          if docker image inspect jellyfin/jellyfin:${{ env.JELLYFIN_VERSION }} &> /dev/null; then
+            echo "Tagging image..."
+            docker tag jellyfin/jellyfin:${{ env.JELLYFIN_VERSION }} ${{ secrets.DOCKER_USERNAME }}/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}
+            echo "Pushing image..."
+            docker push ${{ secrets.DOCKER_USERNAME }}/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}
+          else
+            echo "Error: Docker image jellyfin/jellyfin:${{ env.JELLYFIN_VERSION }} not found"
+            echo "Available images:"
+            docker images
+            exit 1
+          fi
+
       - name: Discord notification
         if: failure()
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         uses: Ilshidur/action-discord@master
         with:
-          args: 'The workflow "Release Build and Push to DockerHub" has failed!'
+          args: 'The workflow "Release Build and Push to DockerHub" has failed! Check the logs for more information. Input version: ${{ inputs.version || "master" }}, Set JELLYFIN_VERSION: ${{ env.JELLYFIN_VERSION }}'
