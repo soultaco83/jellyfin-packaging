@@ -59,7 +59,7 @@ RUN apk add \
 WORKDIR ${SOURCE_DIR}
 COPY jellyfin-web .
 
-RUN npm ci --no-audit --unsafe-perm \
+RUN npm install --no-audit --unsafe-perm \
  && npm run build:production \
  && mv dist ${ARTIFACT_DIR}
 #
