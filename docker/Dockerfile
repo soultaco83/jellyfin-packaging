@@ -132,6 +132,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES="compute,video,utility"
 
 # Install dependencies:
 RUN apt-get update \
+ && apt-get upgrade -y \
  && apt-get install --no-install-recommends --no-install-suggests --yes \
     ca-certificates \
     gnupg \
