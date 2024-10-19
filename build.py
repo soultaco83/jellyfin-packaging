@@ -51,213 +51,213 @@ def _determine_arch(build_type, build_arch, build_version):
         return PACKAGE_ARCH
 
 
-def build_package_deb(
-    jellyfin_version, build_type, build_arch, build_version, local=False
-):
-    """
-    Build a .deb package (Debian or Ubuntu) within a Docker container that matches the requested distribution version
-    """
-    log(f"> Building an {build_arch} {build_type} .deb package...")
-    log("")
-
-    try:
-        os_type = build_type if build_type in configurations.keys() else None
-        if os_type is None:
-            raise ValueError(
-                f"{build_type} is not a valid OS type in {configurations.keys()}"
-            )
-        os_version = (
-            configurations[build_type]["releases"][build_version]
-            if build_version in configurations[build_type]["releases"].keys()
-            else None
-        )
-        if os_version is None:
-            raise ValueError(
-                f"{build_version} is not a valid {build_type} version in {configurations[build_type]['releases'].keys()}"
-            )
-        PACKAGE_ARCH = _determine_arch(build_type, build_arch, build_version)
-    except Exception as e:
-        log(f"Invalid/unsupported arguments: {e}")
-        exit(1)
-
-    # Set the dockerfile
-    dockerfile = configurations[build_type]["dockerfile"]
-
-    # Set the cross-gcc version
-    crossgccvers = configurations[build_type]["cross-gcc"][build_version]
-
-    # Prepare the debian changelog file
-    changelog_src = f"{repo_root_dir}/debian/changelog.in"
-    changelog_dst = f"{repo_root_dir}/debian/changelog"
-
-    with open(changelog_src) as fh:
-        changelog = fh.read()
-
-    if "v" in jellyfin_version:
-        comment = f"Jellyfin release {jellyfin_version}, see https://github.com/jellyfin/jellyfin/releases/{jellyfin_version} for details."
-    else:
-        comment = f"Jellyin unstable release {jellyfin_version}."
-    jellyfin_version = jellyfin_version.replace("v", "")
-
-    changelog = changelog.format(
-        package_version=jellyfin_version,
-        package_build=f"{build_type[:3]}{os_version.replace('.', '')}",
-        release_comment=comment,
-        release_date=format_datetime(localtime()),
-    )
-
-    with open(changelog_dst, "w") as fh:
-        fh.write(changelog)
-
-    # Use a unique docker image name for consistency
-    imagename = f"{configurations[build_type]['imagename']}-{jellyfin_version}_{build_arch}-{build_type}-{build_version}"
-
-    # Build the dockerfile and packages
-    os.system(
-        f"{docker_build_cmd} --build-arg PACKAGE_TYPE={os_type} --build-arg PACKAGE_VERSION={os_version} --build-arg PACKAGE_ARCH={PACKAGE_ARCH} --build-arg GCC_VERSION={crossgccvers} --file {repo_root_dir}/{dockerfile} --tag {imagename} {repo_root_dir}"
-    )
-    os.system(
-        f"{docker_run_cmd} --volume {repo_root_dir}:/jellyfin --volume {repo_root_dir}/out/{build_type}:/dist --env JELLYFIN_VERSION={jellyfin_version} --name {imagename} {imagename}"
-    )
-
-
-def build_linux(
-    jellyfin_version, build_type, build_arch, _build_version, local=False
-):
-    """
-    Build a portable Linux archive
-    """
-    log(f"> Building a portable {build_arch} Linux archive...")
-    log("")
-
-    try:
-        PACKAGE_ARCH = _determine_arch(build_type, build_arch, _build_version)
-        DOTNET_ARCH = configurations[build_type]["archmaps"][build_arch]["DOTNET_ARCH"]
-    except Exception as e:
-        log(f"Invalid/unsupported arguments: {e}")
-        exit(1)
-
-    jellyfin_version = jellyfin_version.replace("v", "")
-
-    # Set the dockerfile
-    dockerfile = configurations[build_type]["dockerfile"]
-
-    # Use a unique docker image name for consistency
-    imagename = f"{configurations[build_type]['imagename']}-{jellyfin_version}_{build_arch}-{build_type}"
-
-    # Set the archive type (tar-gz or zip)
-    archivetypes = f"{configurations[build_type]['archivetypes']}"
-
-    # Build the dockerfile and packages
-    os.system(
-        f"{docker_build_cmd} --file {repo_root_dir}/{dockerfile} --tag {imagename} {repo_root_dir}"
-    )
-    os.system(
-        f"{docker_run_cmd} --volume {repo_root_dir}:/jellyfin --volume {repo_root_dir}/out/{build_type}:/dist --env JELLYFIN_VERSION={jellyfin_version} --env BUILD_TYPE={build_type} --env PACKAGE_ARCH={PACKAGE_ARCH} --env DOTNET_TYPE=linux --env DOTNET_ARCH={DOTNET_ARCH} --env ARCHIVE_TYPES={archivetypes} --name {imagename} {imagename}"
-    )
-
-
-def build_windows(
-    jellyfin_version, build_type, _build_arch, _build_version, local=False
-):
-    """
-    Build a portable Windows archive
-    """
-    log(f"> Building a portable {build_arch} Windows archive...")
-    log("")
-
-    try:
-        PACKAGE_ARCH = _determine_arch(build_type, build_arch, _build_version)
-        DOTNET_ARCH = configurations[build_type]["archmaps"][build_arch]["DOTNET_ARCH"]
-    except Exception as e:
-        log(f"Invalid/unsupported arguments: {e}")
-        exit(1)
-
-    jellyfin_version = jellyfin_version.replace("v", "")
-
-    # Set the dockerfile
-    dockerfile = configurations[build_type]["dockerfile"]
-
-    # Use a unique docker image name for consistency
-    imagename = f"{configurations[build_type]['imagename']}-{jellyfin_version}_{build_arch}-{build_type}"
-
-    # Set the archive type (tar-gz or zip)
-    archivetypes = f"{configurations[build_type]['archivetypes']}"
-
-    # Build the dockerfile and packages
-    os.system(
-        f"{docker_build_cmd} --file {repo_root_dir}/{dockerfile} --tag {imagename} {repo_root_dir}"
-    )
-    os.system(
-        f"{docker_run_cmd} --volume {repo_root_dir}:/jellyfin --volume {repo_root_dir}/out/{build_type}:/dist --env JELLYFIN_VERSION={jellyfin_version} --env BUILD_TYPE={build_type} --env PACKAGE_ARCH={PACKAGE_ARCH} --env DOTNET_TYPE=win --env DOTNET_ARCH={DOTNET_ARCH} --env ARCHIVE_TYPES={archivetypes} --name {imagename} {imagename}"
-    )
-
-
-def build_macos(
-    jellyfin_version, build_type, build_arch, _build_version, local=False
-):
-    """
-    Build a portable MacOS archive
-    """
-    log(f"> Building a portable {build_arch} MacOS archive...")
-    log("")
-
-    try:
-        PACKAGE_ARCH = _determine_arch(build_type, build_arch, _build_version)
-        DOTNET_ARCH = configurations[build_type]["archmaps"][build_arch]["DOTNET_ARCH"]
-    except Exception as e:
-        log(f"Invalid/unsupported arguments: {e}")
-        exit(1)
-
-    jellyfin_version = jellyfin_version.replace("v", "")
-
-    # Set the dockerfile
-    dockerfile = configurations[build_type]["dockerfile"]
-
-    # Use a unique docker image name for consistency
-    imagename = f"{configurations[build_type]['imagename']}-{jellyfin_version}_{build_arch}-{build_type}"
-
-    # Set the archive type (tar-gz or zip)
-    archivetypes = f"{configurations[build_type]['archivetypes']}"
-
-    # Build the dockerfile and packages
-    os.system(
-        f"{docker_build_cmd} --file {repo_root_dir}/{dockerfile} --tag {imagename} {repo_root_dir}"
-    )
-    os.system(
-        f"{docker_run_cmd} --volume {repo_root_dir}:/jellyfin --volume {repo_root_dir}/out/{build_type}:/dist --env JELLYFIN_VERSION={jellyfin_version} --env BUILD_TYPE={build_type} --env PACKAGE_ARCH={PACKAGE_ARCH} --env DOTNET_TYPE=osx --env DOTNET_ARCH={DOTNET_ARCH} --env ARCHIVE_TYPES={archivetypes} --name {imagename} {imagename}"
-    )
-
-
-def build_portable(
-    jellyfin_version, build_type, _build_arch, _build_version, local=False
-):
-    """
-    Build a portable .NET archive
-    """
-    log("> Building a portable .NET archive...")
-    log("")
-
-    jellyfin_version = jellyfin_version.replace("v", "")
-
-    # Set the dockerfile
-    dockerfile = configurations[build_type]["dockerfile"]
-
-    # Use a unique docker image name for consistency
-    imagename = (
-        f"{configurations[build_type]['imagename']}-{jellyfin_version}_{build_type}"
-    )
-
-    # Set the archive type (tar-gz or zip)
-    archivetypes = f"{configurations[build_type]['archivetypes']}"
-
-    # Build the dockerfile and packages
-    os.system(
-        f"{docker_build_cmd} --file {repo_root_dir}/{dockerfile} --tag {imagename} {repo_root_dir}"
-    )
-    os.system(
-        f"{docker_run_cmd} --volume {repo_root_dir}:/jellyfin --volume {repo_root_dir}/out/{build_type}:/dist --env JELLYFIN_VERSION={jellyfin_version} --env BUILD_TYPE={build_type} --env ARCHIVE_TYPES={archivetypes} --name {imagename} {imagename}"
-    )
+##def build_package_deb(
+##    jellyfin_version, build_type, build_arch, build_version, local=False
+##):
+##    """
+##    Build a .deb package (Debian or Ubuntu) within a Docker container that matches the requested distribution version
+##    """
+##    log(f"> Building an {build_arch} {build_type} .deb package...")
+##    log("")
+##
+##    try:
+##        os_type = build_type if build_type in configurations.keys() else None
+##        if os_type is None:
+##            raise ValueError(
+##                f"{build_type} is not a valid OS type in {configurations.keys()}"
+##            )
+##        os_version = (
+##            configurations[build_type]["releases"][build_version]
+##            if build_version in configurations[build_type]["releases"].keys()
+##            else None
+##        )
+##        if os_version is None:
+##            raise ValueError(
+##                f"{build_version} is not a valid {build_type} version in {configurations[build_type]['releases'].keys()}"
+##            )
+##        PACKAGE_ARCH = _determine_arch(build_type, build_arch, build_version)
+##    except Exception as e:
+##        log(f"Invalid/unsupported arguments: {e}")
+##        exit(1)
+##
+##    # Set the dockerfile
+##    dockerfile = configurations[build_type]["dockerfile"]
+##
+##    # Set the cross-gcc version
+##    crossgccvers = configurations[build_type]["cross-gcc"][build_version]
+##
+##    # Prepare the debian changelog file
+##    changelog_src = f"{repo_root_dir}/debian/changelog.in"
+##    changelog_dst = f"{repo_root_dir}/debian/changelog"
+##
+##    with open(changelog_src) as fh:
+##        changelog = fh.read()
+##
+##    if "v" in jellyfin_version:
+##        comment = f"Jellyfin release {jellyfin_version}, see https://github.com/jellyfin/jellyfin/releases/{jellyfin_version} for details."
+##    else:
+##        comment = f"Jellyin unstable release {jellyfin_version}."
+##    jellyfin_version = jellyfin_version.replace("v", "")
+##
+##    changelog = changelog.format(
+##        package_version=jellyfin_version,
+##        package_build=f"{build_type[:3]}{os_version.replace('.', '')}",
+##        release_comment=comment,
+##        release_date=format_datetime(localtime()),
+##    )
+##
+##    with open(changelog_dst, "w") as fh:
+##        fh.write(changelog)
+##
+##    # Use a unique docker image name for consistency
+##    imagename = f"{configurations[build_type]['imagename']}-{jellyfin_version}_{build_arch}-{build_type}-{build_version}"
+##
+##    # Build the dockerfile and packages
+##    os.system(
+##        f"{docker_build_cmd} --build-arg PACKAGE_TYPE={os_type} --build-arg PACKAGE_VERSION={os_version} --build-arg PACKAGE_ARCH={PACKAGE_ARCH} --build-arg GCC_VERSION={crossgccvers} --file {repo_root_dir}/{dockerfile} --tag {imagename} {repo_root_dir}"
+##    )
+##    os.system(
+##        f"{docker_run_cmd} --volume {repo_root_dir}:/jellyfin --volume {repo_root_dir}/out/{build_type}:/dist --env JELLYFIN_VERSION={jellyfin_version} --name {imagename} {imagename}"
+##    )
+##
+##
+##def build_linux(
+##    jellyfin_version, build_type, build_arch, _build_version, local=False
+##):
+##    """
+##    Build a portable Linux archive
+##    """
+##    log(f"> Building a portable {build_arch} Linux archive...")
+##    log("")
+##
+##    try:
+##        PACKAGE_ARCH = _determine_arch(build_type, build_arch, _build_version)
+##        DOTNET_ARCH = configurations[build_type]["archmaps"][build_arch]["DOTNET_ARCH"]
+##    except Exception as e:
+##        log(f"Invalid/unsupported arguments: {e}")
+##        exit(1)
+##
+##    jellyfin_version = jellyfin_version.replace("v", "")
+##
+##    # Set the dockerfile
+##    dockerfile = configurations[build_type]["dockerfile"]
+##
+##    # Use a unique docker image name for consistency
+##    imagename = f"{configurations[build_type]['imagename']}-{jellyfin_version}_{build_arch}-{build_type}"
+##
+##    # Set the archive type (tar-gz or zip)
+##    archivetypes = f"{configurations[build_type]['archivetypes']}"
+##
+##    # Build the dockerfile and packages
+##    os.system(
+##        f"{docker_build_cmd} --file {repo_root_dir}/{dockerfile} --tag {imagename} {repo_root_dir}"
+##    )
+##    os.system(
+##        f"{docker_run_cmd} --volume {repo_root_dir}:/jellyfin --volume {repo_root_dir}/out/{build_type}:/dist --env JELLYFIN_VERSION={jellyfin_version} --env BUILD_TYPE={build_type} --env PACKAGE_ARCH={PACKAGE_ARCH} --env DOTNET_TYPE=linux --env DOTNET_ARCH={DOTNET_ARCH} --env ARCHIVE_TYPES={archivetypes} --name {imagename} {imagename}"
+##    )
+##
+##
+##def build_windows(
+##    jellyfin_version, build_type, _build_arch, _build_version, local=False
+##):
+##    """
+##    Build a portable Windows archive
+##    """
+##    log(f"> Building a portable {build_arch} Windows archive...")
+##    log("")
+##
+##    try:
+##        PACKAGE_ARCH = _determine_arch(build_type, build_arch, _build_version)
+##        DOTNET_ARCH = configurations[build_type]["archmaps"][build_arch]["DOTNET_ARCH"]
+##    except Exception as e:
+##        log(f"Invalid/unsupported arguments: {e}")
+##        exit(1)
+##
+##    jellyfin_version = jellyfin_version.replace("v", "")
+##
+##    # Set the dockerfile
+##    dockerfile = configurations[build_type]["dockerfile"]
+##
+##    # Use a unique docker image name for consistency
+##    imagename = f"{configurations[build_type]['imagename']}-{jellyfin_version}_{build_arch}-{build_type}"
+##
+##    # Set the archive type (tar-gz or zip)
+##    archivetypes = f"{configurations[build_type]['archivetypes']}"
+##
+##    # Build the dockerfile and packages
+##    os.system(
+##        f"{docker_build_cmd} --file {repo_root_dir}/{dockerfile} --tag {imagename} {repo_root_dir}"
+##    )
+##    os.system(
+##        f"{docker_run_cmd} --volume {repo_root_dir}:/jellyfin --volume {repo_root_dir}/out/{build_type}:/dist --env JELLYFIN_VERSION={jellyfin_version} --env BUILD_TYPE={build_type} --env PACKAGE_ARCH={PACKAGE_ARCH} --env DOTNET_TYPE=win --env DOTNET_ARCH={DOTNET_ARCH} --env ARCHIVE_TYPES={archivetypes} --name {imagename} {imagename}"
+##    )
+##
+##
+##def build_macos(
+##    jellyfin_version, build_type, build_arch, _build_version, local=False
+##):
+##    """
+##    Build a portable MacOS archive
+##    """
+##    log(f"> Building a portable {build_arch} MacOS archive...")
+##    log("")
+##
+##    try:
+##        PACKAGE_ARCH = _determine_arch(build_type, build_arch, _build_version)
+##        DOTNET_ARCH = configurations[build_type]["archmaps"][build_arch]["DOTNET_ARCH"]
+##    except Exception as e:
+##        log(f"Invalid/unsupported arguments: {e}")
+##        exit(1)
+##
+##    jellyfin_version = jellyfin_version.replace("v", "")
+##
+##    # Set the dockerfile
+##    dockerfile = configurations[build_type]["dockerfile"]
+##
+##    # Use a unique docker image name for consistency
+##    imagename = f"{configurations[build_type]['imagename']}-{jellyfin_version}_{build_arch}-{build_type}"
+##
+##    # Set the archive type (tar-gz or zip)
+##    archivetypes = f"{configurations[build_type]['archivetypes']}"
+##
+##    # Build the dockerfile and packages
+##    os.system(
+##        f"{docker_build_cmd} --file {repo_root_dir}/{dockerfile} --tag {imagename} {repo_root_dir}"
+##    )
+##    os.system(
+##        f"{docker_run_cmd} --volume {repo_root_dir}:/jellyfin --volume {repo_root_dir}/out/{build_type}:/dist --env JELLYFIN_VERSION={jellyfin_version} --env BUILD_TYPE={build_type} --env PACKAGE_ARCH={PACKAGE_ARCH} --env DOTNET_TYPE=osx --env DOTNET_ARCH={DOTNET_ARCH} --env ARCHIVE_TYPES={archivetypes} --name {imagename} {imagename}"
+##    )
+##
+##
+##def build_portable(
+##    jellyfin_version, build_type, _build_arch, _build_version, local=False
+##):
+##    """
+##    Build a portable .NET archive
+##    """
+##    log("> Building a portable .NET archive...")
+##    log("")
+##
+##    jellyfin_version = jellyfin_version.replace("v", "")
+##
+##    # Set the dockerfile
+##    dockerfile = configurations[build_type]["dockerfile"]
+##
+##    # Use a unique docker image name for consistency
+##    imagename = (
+##        f"{configurations[build_type]['imagename']}-{jellyfin_version}_{build_type}"
+##    )
+##
+##    # Set the archive type (tar-gz or zip)
+##    archivetypes = f"{configurations[build_type]['archivetypes']}"
+##
+##    # Build the dockerfile and packages
+##    os.system(
+##        f"{docker_build_cmd} --file {repo_root_dir}/{dockerfile} --tag {imagename} {repo_root_dir}"
+##    )
+##    os.system(
+##        f"{docker_run_cmd} --volume {repo_root_dir}:/jellyfin --volume {repo_root_dir}/out/{build_type}:/dist --env JELLYFIN_VERSION={jellyfin_version} --env BUILD_TYPE={build_type} --env ARCHIVE_TYPES={archivetypes} --name {imagename} {imagename}"
+##    )
 
 
 def build_docker(
@@ -418,107 +418,107 @@ def build_docker(
 
         return manifests
 
-    # Log in to DockerHub
-    os.system(
-        f"docker login -u {getenv('DOCKER_USERNAME')} -p {getenv('DOCKER_TOKEN')} 2>&1"
-    )
-
-    # Push the images to DockerHub
-    for image in images_hub:
-        log(f">>> Pushing image {image} to DockerHub")
-        log(f">>>> docker push {image} 2>&1")
-        os.system(f"docker push {image} 2>&1")
-
-    manifests_hub = build_manifests("docker.io", images_hub)
-
-    # Push the images and manifests to DockerHub
-    for manifest in manifests_hub:
-        log(f">>> Pushing manifest {manifest} to DockerHub")
-        log(f">>>> docker manifest push --purge {manifest} 2>&1")
-        os.system(f"docker manifest push --purge {manifest} 2>&1")
-
-    # Log out of DockerHub
-    os.system("docker logout")
-
-    # Log in to GHCR
-    os.system(
-        f"docker login -u {getenv('GHCR_USERNAME')} -p {getenv('GHCR_TOKEN')} ghcr.io 2>&1"
-    )
-
-    # Push the images to GHCR
-    for image in images_ghcr:
-        log(f">>> Pushing image {image} to GHCR")
-        log(f">>>> docker push {image} 2>&1")
-        os.system(f"docker push {image} 2>&1")
-
-    manifests_ghcr = build_manifests("ghcr.io", images_ghcr)
-
-    # Push the images and manifests to GHCR
-    for manifest in manifests_ghcr:
-        log(f">>> Pushing manifest {manifest} to GHCR")
-        log(f">>>> docker manifest push --purge {manifest} 2>&1")
-        os.system(f"docker manifest push --purge {manifest} 2>&1")
-
-    # Log out of GHCR
-    os.system("docker logout")
-
-
-def build_nuget(
-    jellyfin_version, build_type, _build_arch, _build_version, local=False
-):
-    """
-    Pack and upload nuget packages
-    """
-    log("> Building Nuget packages...")
-    log("")
-
-    project_files = configurations["nuget"]["projects"]
-    log(project_files)
-
-    # Determine if this is a "latest"-type image (v in jellyfin_version) or not
-    if "v" in jellyfin_version:
-        is_stable = True
-    else:
-        is_stable = False
-
-    jellyfin_version = jellyfin_version.replace("v", "")
-
-    # Set today's date in a convenient format for use as an image suffix
-    date = datetime.now().strftime("%Y%m%d%H%M%S")
-
-    pack_command_base = "dotnet pack -o out/nuget/"
-    if is_stable:
-        pack_command = f"{pack_command_base} -p:Version={jellyfin_version}"
-    else:
-        pack_command = (
-            f"{pack_command_base} --version-suffix {date} -p:Stability=Unstable"
-        )
-
-    for project in project_files:
-        log(f">> Packing  {project}...")
-        log("")
-
-        project_pack_command = f"{pack_command} jellyfin-server/{project}"
-        log(f">>>> {project_pack_command}")
-        os.system(project_pack_command)
-
-    if local:
-        return
-
-    if is_stable:
-        nuget_repo = configurations["nuget"]["feed_urls"]["stable"]
-        nuget_key = getenv("NUGET_STABLE_KEY")
-    else:
-        nuget_repo = configurations["nuget"]["feed_urls"]["unstable"]
-        nuget_key = getenv("NUGET_UNSTABLE_KEY")
-
-    if nuget_key is None:
-        log(f"Error: Failed to get NUGET_*_KEY environment variable")
-        exit(1)
-
-    push_command = f"dotnet nuget push out/nuget/*.nupkg -s {nuget_repo} -k {nuget_key}"
-    log(f">>>> {push_command}")
-    os.system(push_command)
+##    # Log in to DockerHub
+##    os.system(
+##        f"docker login -u {getenv('DOCKER_USERNAME')} -p {getenv('DOCKER_TOKEN')} 2>&1"
+##    )
+##
+##    # Push the images to DockerHub
+##    for image in images_hub:
+##        log(f">>> Pushing image {image} to DockerHub")
+##        log(f">>>> docker push {image} 2>&1")
+##        os.system(f"docker push {image} 2>&1")
+##
+##    manifests_hub = build_manifests("docker.io", images_hub)
+##
+##    # Push the images and manifests to DockerHub
+##    for manifest in manifests_hub:
+##        log(f">>> Pushing manifest {manifest} to DockerHub")
+##        log(f">>>> docker manifest push --purge {manifest} 2>&1")
+##        os.system(f"docker manifest push --purge {manifest} 2>&1")
+##
+##    # Log out of DockerHub
+##    os.system("docker logout")
+##
+##    # Log in to GHCR
+##    os.system(
+##        f"docker login -u {getenv('GHCR_USERNAME')} -p {getenv('GHCR_TOKEN')} ghcr.io 2>&1"
+##    )
+##
+##    # Push the images to GHCR
+##    for image in images_ghcr:
+##        log(f">>> Pushing image {image} to GHCR")
+##        log(f">>>> docker push {image} 2>&1")
+##        os.system(f"docker push {image} 2>&1")
+##
+##    manifests_ghcr = build_manifests("ghcr.io", images_ghcr)
+##
+##    # Push the images and manifests to GHCR
+##    for manifest in manifests_ghcr:
+##        log(f">>> Pushing manifest {manifest} to GHCR")
+##        log(f">>>> docker manifest push --purge {manifest} 2>&1")
+##        os.system(f"docker manifest push --purge {manifest} 2>&1")
+##
+##    # Log out of GHCR
+##    os.system("docker logout")
+##
+##
+##def build_nuget(
+##    jellyfin_version, build_type, _build_arch, _build_version, local=False
+##):
+##    """
+##    Pack and upload nuget packages
+##    """
+##    log("> Building Nuget packages...")
+##    log("")
+##
+##    project_files = configurations["nuget"]["projects"]
+##    log(project_files)
+##
+##    # Determine if this is a "latest"-type image (v in jellyfin_version) or not
+##    if "v" in jellyfin_version:
+##        is_stable = True
+##    else:
+##        is_stable = False
+##
+##    jellyfin_version = jellyfin_version.replace("v", "")
+##
+##    # Set today's date in a convenient format for use as an image suffix
+##    date = datetime.now().strftime("%Y%m%d%H%M%S")
+##
+##    pack_command_base = "dotnet pack -o out/nuget/"
+##    if is_stable:
+##        pack_command = f"{pack_command_base} -p:Version={jellyfin_version}"
+##    else:
+##        pack_command = (
+##            f"{pack_command_base} --version-suffix {date} -p:Stability=Unstable"
+##        )
+##
+##    for project in project_files:
+##        log(f">> Packing  {project}...")
+##        log("")
+##
+##        project_pack_command = f"{pack_command} jellyfin-server/{project}"
+##        log(f">>>> {project_pack_command}")
+##        os.system(project_pack_command)
+##
+##    if local:
+##        return
+##
+##    if is_stable:
+##        nuget_repo = configurations["nuget"]["feed_urls"]["stable"]
+##        nuget_key = getenv("NUGET_STABLE_KEY")
+##    else:
+##        nuget_repo = configurations["nuget"]["feed_urls"]["unstable"]
+##        nuget_key = getenv("NUGET_UNSTABLE_KEY")
+##
+##    if nuget_key is None:
+##        log(f"Error: Failed to get NUGET_*_KEY environment variable")
+##        exit(1)
+##
+##    push_command = f"dotnet nuget push out/nuget/*.nupkg -s {nuget_repo} -k {nuget_key}"
+##    log(f">>>> {push_command}")
+##    os.system(push_command)
 
 
 def usage():
