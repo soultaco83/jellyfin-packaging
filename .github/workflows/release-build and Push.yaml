@@ -87,9 +87,7 @@ jobs:
           MANIFEST_NAME="soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}"
           echo "Creating multi-arch manifest ${MANIFEST_NAME}"
           docker manifest create "${MANIFEST_NAME}" \
-            "soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}-amd64" \
-            "soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}-arm64" \
-            "soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}-armhf"
+            "soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}-amd64"
           
           echo "Pushing multi-arch manifest"
           docker manifest push "${MANIFEST_NAME}"
