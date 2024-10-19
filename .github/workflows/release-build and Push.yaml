@@ -76,7 +76,7 @@ jobs:
             echo "Pushing image..."
             docker push ${{ secrets.DOCKER_USERNAME }}/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}
           else
-            echo "Error: Docker image j${{ secrets.DOCKER_USERNAME }}/jellyfin_with_request:${{ env.JELLYFIN_VERSION }} not found"
+            echo "Error: Docker image ${{ secrets.DOCKER_USERNAME }}/jellyfin_with_request:${{ env.JELLYFIN_VERSION }} not found"
             echo "Available images:"
             docker images
             exit 1
