@@ -59,9 +59,6 @@ RUN apk add \
 WORKDIR ${SOURCE_DIR}
 COPY jellyfin-web .
 
-# Initialize Git repository
-RUN git init && git add . && git commit -m "Initial commit"
-
 RUN npm ci --no-audit --unsafe-perm \
  && npm run build:production \
  && mv dist ${ARTIFACT_DIR}
