@@ -1,0 +1,72 @@
+name: "Release Build and Push to DockerHub"
+
+on:
+  schedule:
+    # Weekly unstable trigger on Monday at 05:00 GMT
+    - cron: '0 3 * * 6'
+  workflow_dispatch:
+    # Manual trigger from bot
+    inputs:
+      version:
+        required: true
+        type: string
+        description: 'The server and web stable release tag ("vX.Y.Z") or "master"'
+
+permissions:
+  contents: read
+
+jobs:
+  Docker:
+    runs-on: ubuntu-22.04
+    continue-on-error: false  # true in prod, false for testing
+    steps:
+      - name: "Set dated version for unstable builds"
+        id: version
+        run: |-
+          if grep --silent --extended-regexp '^v[0-9]+' <<< "${{ inputs.version || 'master' }}"; then
+            echo "JELLYFIN_VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+            echo "JELLYFIN_RELEASE_TYPE=stable" >> $GITHUB_ENV
+          else
+            echo "JELLYFIN_VERSION=$(date +'%Y%m%d%H')" >> $GITHUB_ENV
+            echo "JELLYFIN_RELEASE_TYPE=unstable" >> $GITHUB_ENV
+          fi
+
+      - name: "Install dependencies"
+        run: |-
+          sudo apt-get update
+          sudo apt-get install --yes python3-git python3-yaml
+
+      - name: "Checkout repository"
+        uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
+
+      - name: "Prepare repository"
+        run: |-
+          ./checkout.py ${{ inputs.version || 'master' }}
+
+      - name: "Run builder for Docker containers"
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |-
+          sudo --preserve-env ./build.py ${{ env.JELLYFIN_VERSION }} docker
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push to Docker Hub
+        run: |
+          docker tag jellyfin/jellyfin:${{ env.JELLYFIN_VERSION }} ${{ secrets.DOCKER_USERNAME }}/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}
+          
+      - name: Discord notification
+        if: failure()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        uses: Ilshidur/action-discord@master
+        with:
+          args: 'The workflow "Release Build and Push to DockerHub" has failed!'
