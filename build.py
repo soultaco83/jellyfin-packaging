@@ -540,14 +540,14 @@ def usage():
 
 # Define a map of possible build functions from the YAML configuration
 function_definitions = {
-    "build_package_deb": build_package_deb,
-    "build_portable": build_portable,
-    "build_linux": build_linux,
-    "build_windows": build_windows,
-    "build_macos": build_macos,
-    "build_portable": build_portable,
+#    "build_package_deb": build_package_deb,
+#    "build_portable": build_portable,
+#    "build_linux": build_linux,
+#    "build_windows": build_windows,
+#    "build_macos": build_macos,
+#    "build_portable": build_portable,
     "build_docker": build_docker,
-    "build_nuget": build_nuget,
+#    "build_nuget": build_nuget,
 }
 
 
