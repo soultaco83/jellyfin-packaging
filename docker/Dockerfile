@@ -193,6 +193,29 @@ RUN mkdir -p ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR} \
 COPY --from=server /server /jellyfin
 COPY --from=web /web /jellyfin/jellyfin-web
 
+# Install dependencies for plugin
+RUN apt-get update && \
+	apt-get install -y --no-install-recommends \
+	jq \
+	unzip \
+	wget \
+	curl 
+	
+# Install custom plugin
+RUN PLUGIN_URL=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.assets[0].browser_download_url') && \
+    PLUGIN_VERSION=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.tag_name' | sed 's/^v//') && \
+    curl -L -o /tmp/plugin.zip $PLUGIN_URL && \
+    mkdir -p /config/data/plugins/RequestsAddon_$PLUGIN_VERSION && \
+    unzip /tmp/plugin.zip -d /config/data/plugins/RequestsAddon_$PLUGIN_VERSION && \
+    chmod 755 -R /config/data/plugins/RequestsAddon_$PLUGIN_VERSION && \
+	chmod 777 -R /jellyfin/jellyfin-web
+	
+# Cleanup
+RUN apt-get remove -y wget jq unzip && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /tmp/*
+	
 ARG JELLYFIN_VERSION
 LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-server"
 LABEL "org.opencontainers.image.title"="Jellyfin with request"
