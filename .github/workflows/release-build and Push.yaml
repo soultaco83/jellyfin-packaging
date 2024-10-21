@@ -55,8 +55,8 @@ jobs:
           pwd
           echo "Contents of current directory:"
           ls -la
-          echo "Contents of docker directory:"
-          ls -la docker/
+          echo "Contents of docker directory (if exists):"
+          ls -la docker/ || echo "docker directory not found"
 
       - name: Set permissions for docker-entrypoint.sh
         run: chmod +x docker/docker-entrypoint.sh
