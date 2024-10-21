@@ -242,6 +242,7 @@ RUN mkdir -p /config/plugins/RequestsAddon_$(source /etc/environment && echo $PL
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Preserve plugin files
 RUN mkdir -p /preserved_plugins && \
     cp -r /jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION) /preserved_plugins/
 
@@ -251,8 +252,14 @@ RUN apt-get remove -y dotnet-sdk-8.0 jq && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/jellyfin-requests && \
     mkdir -p /jellyfin/plugins && \
-    mv /preserved_plugins/* /jellyfin/plugins/ && \
+    cp -Rf /preserved_plugins/* /jellyfin/plugins/ && \
     rm -rf /preserved_plugins
+
+# Verify plugin files after cleanup
+RUN echo "Contents of /jellyfin/plugins after cleanup:" && \
+    ls -R /jellyfin/plugins && \
+    echo "All DLL files in /jellyfin/plugins after cleanup:" && \
+    find /jellyfin/plugins -name "*.dll"
 
 ARG JELLYFIN_VERSION
 LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-server"
