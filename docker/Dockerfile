@@ -205,9 +205,9 @@ RUN apt-get update && \
 RUN PLUGIN_URL=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.assets[0].browser_download_url') && \
     PLUGIN_VERSION=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.tag_name' | sed 's/^v//') && \
     curl -L -o /tmp/plugin.zip $PLUGIN_URL && \
-    mkdir -p /config/plugins/RequestsAddon_$PLUGIN_VERSION && \
-    unzip /tmp/plugin.zip -d /config/plugins/RequestsAddon_$PLUGIN_VERSION && \
-    chmod 755 -R /config/plugins/RequestsAddon_$PLUGIN_VERSION && \
+    mkdir -p /config/test/plugins/RequestsAddon_$PLUGIN_VERSION && \
+    unzip /tmp/plugin.zip -d /config/test/plugins/RequestsAddon_$PLUGIN_VERSION && \
+    chmod 755 -R /config/test/plugins/RequestsAddon_$PLUGIN_VERSION && \
     chmod 777 -R /jellyfin/jellyfin-web
 	
 # Cleanup
