@@ -7,3 +7,6 @@
 [submodule "jellyfin-server-windows"]
 	path = jellyfin-server-windows
 	url = https://github.com/jellyfin/jellyfin-server-windows.git
+[submodule "jellyfin-requests"]
+	path = jellyfin-requests
+	url = https://github.com/soultaco83/Jellyfin_requests_plugin.git
