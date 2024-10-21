@@ -62,6 +62,7 @@ COPY jellyfin-web .
 RUN npm ci --no-audit --unsafe-perm \
  && npm run build:production \
  && mv dist ${ARTIFACT_DIR}
+
 #
 # Build the server artifacts
 #
@@ -119,7 +120,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     JELLYFIN_LOG_DIR="/config/log" \
     JELLYFIN_WEB_DIR="/jellyfin/jellyfin-web" \
     JELLYFIN_FFMPEG="/usr/lib/jellyfin-ffmpeg/ffmpeg" \
-	JELLYFIN_PLUGIN_PATH="/usr/lib/jellyfin/plugins:${JELLYFIN_DATA_DIR}/plugins"
+    JELLYFIN_PLUGIN_PATH="/usr/lib/jellyfin/plugins:${JELLYFIN_DATA_DIR}/plugins"
 
 # required for fontconfig cache
 ENV XDG_CACHE_HOME=${JELLYFIN_CACHE_DIR}
@@ -156,9 +157,6 @@ RUN apt-get update \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
 # Intel VAAPI Tone mapping dependencies:
-# Prefer NEO to Beignet since the latter one doesn't support Comet Lake or newer for now.
-# Do not use the intel-opencl-icd package from repo since they will not build with RELEASE_WITH_REGKEYS enabled.
-# https://github.com/intel/compute-runtime/releases
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     mkdir intel-compute-runtime \
  && cd intel-compute-runtime \
@@ -221,13 +219,20 @@ RUN LATEST_VERSION=$(jq -r '.[0].versions | sort_by(.timestamp) | reverse | .[0]
 
 # Build the plugin
 RUN cd /tmp/jellyfin-requests && \
-    dotnet publish --configuration Release --output="/jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION)" && \
-    chmod -R 755 /jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION) && \
-    echo "Plugin built. Contents of /jellyfin/plugins:" && \
-    ls -R /jellyfin/plugins
+    dotnet publish --configuration Release --verbosity detailed --output="/jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION)" && \
+    echo "Plugin built. Contents of output directory:" && \
+    ls -R /jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION)
+
+# Verify plugin build
+RUN ls -R /jellyfin/plugins && \
+    find /jellyfin/plugins -name "*.dll"
 
 # Debug: Print the contents of /etc/environment
 RUN cat /etc/environment
+
+# Copy the plugin to the config directory
+RUN mkdir -p /config/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION) && \
+    cp -rv /jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION)/* /config/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION)/
 
 # Copy the entrypoint script
 COPY docker/docker-entrypoint.sh /usr/local/bin/

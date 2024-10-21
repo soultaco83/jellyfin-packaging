@@ -13,6 +13,14 @@ echo "PLUGIN_VERSION: ${PLUGIN_VERSION}"
 # Debug: List the contents of /jellyfin/plugins
 echo "Contents of /jellyfin/plugins:"
 ls -R /jellyfin/plugins
+find /jellyfin/plugins -name "*.dll"
+
+echo "Checking for plugin at: /jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}/Jellyfin.Plugin.RequestsAddon.dll"
+if [ -f "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}/Jellyfin.Plugin.RequestsAddon.dll" ]; then
+    echo "Plugin file exists in the source location."
+else
+    echo "Plugin file does not exist in the source location."
+fi
 
 # Ensure the plugin directory exists
 mkdir -p /config/plugins/RequestsAddon_${PLUGIN_VERSION}
