@@ -222,7 +222,12 @@ RUN LATEST_VERSION=$(jq -r '.[0].versions | sort_by(.timestamp) | reverse | .[0]
 # Build the plugin
 RUN cd /tmp/jellyfin-requests && \
     dotnet publish --configuration Release --output="/jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION)" && \
-    chmod -R 755 /jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION)
+    chmod -R 755 /jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION) && \
+    echo "Plugin built. Contents of /jellyfin/plugins:" && \
+    ls -R /jellyfin/plugins
+
+# Debug: Print the contents of /etc/environment
+RUN cat /etc/environment
 
 # Copy the entrypoint script
 COPY docker/docker-entrypoint.sh /usr/local/bin/
