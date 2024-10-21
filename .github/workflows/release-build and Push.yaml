@@ -49,6 +49,15 @@ jobs:
         run: |
           ./checkout.py ${{ inputs.version || 'master' }}
 
+      - name: List directory contents
+        run: |
+          echo "Current working directory:"
+          pwd
+          echo "Contents of current directory:"
+          ls -la
+          echo "Contents of docker directory:"
+          ls -la docker/
+
       - name: Set permissions for docker-entrypoint.sh
         run: chmod +x docker/docker-entrypoint.sh
 

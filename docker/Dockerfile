@@ -216,7 +216,7 @@ RUN cd /tmp/jellyfin-requests && \
     chmod -R 755 /jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION)
 
 # Copy the entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
+COPY ./docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Cleanup
