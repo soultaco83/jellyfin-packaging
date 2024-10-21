@@ -119,6 +119,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     JELLYFIN_LOG_DIR="/config/log" \
     JELLYFIN_WEB_DIR="/jellyfin/jellyfin-web" \
     JELLYFIN_FFMPEG="/usr/lib/jellyfin-ffmpeg/ffmpeg"
+	JELLYFIN_PLUGIN_PATH="/usr/lib/jellyfin/plugins:${JELLYFIN_DATA_DIR}/plugins"
 
 # required for fontconfig cache
 ENV XDG_CACHE_HOME=${JELLYFIN_CACHE_DIR}
@@ -188,10 +189,12 @@ RUN if test "${PACKAGE_ARCH}" = "arm64"; then \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
 RUN mkdir -p ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR} \
- && chmod 777 ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR}
+ && chmod 755 -R ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR} 
 
 COPY --from=server /server /jellyfin
 COPY --from=web /web /jellyfin/jellyfin-web
+
+RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
 
 # Install dependencies for plugin
 RUN apt-get update && \
@@ -205,10 +208,11 @@ RUN apt-get update && \
 RUN PLUGIN_URL=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.assets[0].browser_download_url') && \
     PLUGIN_VERSION=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.tag_name' | sed 's/^v//') && \
     curl -L -o /tmp/plugin.zip $PLUGIN_URL && \
-	mkdir -p ${JELLYFIN_DATA_DIR}/plugins/RequestsAddon_$PLUGIN_VERSION && \
-	unzip /tmp/plugin.zip -d ${JELLYFIN_DATA_DIR}/plugins/RequestsAddon_$PLUGIN_VERSION && \
-	chmod 755 -R ${JELLYFIN_DATA_DIR}/plugins/RequestsAddon_$PLUGIN_VERSION
-    chmod 777 -R /jellyfin/jellyfin-web
+    mkdir -p /usr/lib/jellyfin/plugins/RequestsAddon_$PLUGIN_VERSION && \
+    unzip /tmp/plugin.zip -d /usr/lib/jellyfin/plugins/RequestsAddon_$PLUGIN_VERSION
+
+RUN chown -R root:root /usr/lib/jellyfin/plugins && \
+    chmod -R 777 /usr/lib/jellyfin/plugins
 	
 # Cleanup
 RUN apt-get remove -y wget jq unzip && \
