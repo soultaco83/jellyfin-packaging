@@ -118,8 +118,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     JELLYFIN_CONFIG_DIR="/config/config" \
     JELLYFIN_LOG_DIR="/config/log" \
     JELLYFIN_WEB_DIR="/jellyfin/jellyfin-web" \
-    JELLYFIN_FFMPEG="/usr/lib/jellyfin-ffmpeg/ffmpeg" \
-	JELLYFIN_PLUGIN_PATH="/usr/lib/jellyfin/plugins:${JELLYFIN_DATA_DIR}/plugins"
+    JELLYFIN_FFMPEG="/usr/lib/jellyfin-ffmpeg/ffmpeg"
 
 # required for fontconfig cache
 ENV XDG_CACHE_HOME=${JELLYFIN_CACHE_DIR}
@@ -198,27 +197,42 @@ RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
 
 # Install dependencies for plugin
 RUN apt-get update && \
-	apt-get install -y --no-install-recommends \
-	jq \
-	unzip \
-	wget \
-	curl 
-	
+    apt-get install -y --no-install-recommends \
+    jq \
+    unzip \
+    wget \
+    curl 
+
 # Install custom plugin
 RUN PLUGIN_URL=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.assets[0].browser_download_url') && \
     PLUGIN_VERSION=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.tag_name' | sed 's/^v//') && \
     curl -L -o /tmp/plugin.zip $PLUGIN_URL && \
-    mkdir -p /usr/lib/jellyfin/plugins/RequestsAddon_$PLUGIN_VERSION && \
-    unzip /tmp/plugin.zip -d /usr/lib/jellyfin/plugins/RequestsAddon_$PLUGIN_VERSION
+    mkdir -p /usr/lib/jellyfin/plugins && \
+    unzip /tmp/plugin.zip -d /usr/lib/jellyfin/plugins/RequestsAddon_$PLUGIN_VERSION && \
+    chown -R root:root /usr/lib/jellyfin/plugins && \
+    chmod -R 755 /usr/lib/jellyfin/plugins && \
+    rm /tmp/plugin.zip
 
-RUN chown -R root:root /usr/lib/jellyfin/plugins && \
-    chmod -R 777 /usr/lib/jellyfin/plugins
-	
+# Set the plugin path environment variable
+ENV JELLYFIN_PLUGIN_PATH="/usr/lib/jellyfin/plugins:${JELLYFIN_DATA_DIR}/plugins"
+
+# Ensure Jellyfin can access the plugin directory
+RUN mkdir -p ${JELLYFIN_DATA_DIR}/plugins && \
+    chown -R root:root ${JELLYFIN_DATA_DIR}/plugins && \
+    chmod -R 755 ${JELLYFIN_DATA_DIR}/plugins
+
+# Verify plugin installation
+RUN ls -R /usr/lib/jellyfin/plugins
+
 # Cleanup
 RUN apt-get remove -y wget jq unzip && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /tmp/*
+
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 	
 ARG JELLYFIN_VERSION
 LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-server"
@@ -230,7 +244,10 @@ LABEL "org.opencontainers.image.url"="https://jellyfin.org"
 
 EXPOSE 8096
 VOLUME ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR}
-ENTRYPOINT ["/jellyfin/jellyfin"]
+
+# Use the entrypoint script
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["/jellyfin/jellyfin"]
 
 HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
      CMD curl -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
