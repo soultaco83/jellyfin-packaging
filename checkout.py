@@ -44,9 +44,10 @@ if target_release != "master":
     if (
         target_release not in submodules["jellyfin-server"].tags
         or target_release not in submodules["jellyfin-web"].tags
+        or target_release not in submodules["jellyfin-requests"].tags
     ):
         print(
-            f"WARNING: Provided tag {target_release} is not a valid tag for both jellyfin-server and jellyfin-web; using master instead"
+            f"WARNING: Provided tag {target_release} is not a valid tag for jellyfin-server, jellyfin-web, and jellyfin-requests; using master instead"
         )
         target_release = "master"
 
@@ -54,7 +55,7 @@ for submodule in submodules.keys():
     if target_release == "master":
         target_head = "origin/master"
     else:
-        if submodule == "jellyfin-server-windows":
+        if submodule in ["jellyfin-server-windows", "jellyfin-requests"]:
             target_head = "origin/master"
         else:
             target_head = f"refs/tags/{target_release}"

@@ -196,30 +196,35 @@ COPY --from=web /web /jellyfin/jellyfin-web
 
 RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
 
-# Install dependencies for plugin
-RUN apt-get update && \
-	apt-get install -y --no-install-recommends \
-	jq \
-	unzip \
-	wget \
-	curl 
-	
-# Install custom plugin
-RUN PLUGIN_URL=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.assets[0].browser_download_url') && \
-    PLUGIN_VERSION=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.tag_name' | sed 's/^v//') && \
-    curl -L -o /tmp/plugin.zip $PLUGIN_URL && \
-    mkdir -p /usr/lib/jellyfin/plugins/RequestsAddon_$PLUGIN_VERSION && \
-    unzip /tmp/plugin.zip -d /usr/lib/jellyfin/plugins/RequestsAddon_$PLUGIN_VERSION
+# Copy the plugin files from the submodule
+COPY jellyfin-requests /tmp/jellyfin-requests
 
-RUN chown -R root:root /usr/lib/jellyfin/plugins && \
-    chmod -R 777 /usr/lib/jellyfin/plugins
-	
+# Install dependencies for plugin and JSON parsing
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    dotnet-sdk-6.0 \
+    jq
+
+# Extract the latest version from the manifest
+RUN LATEST_VERSION=$(jq -r '.[0].versions | sort_by(.timestamp) | reverse | .[0].version' /tmp/jellyfin-requests/manifest.json) && \
+    echo "Latest plugin version: $LATEST_VERSION" && \
+    echo "PLUGIN_VERSION=$LATEST_VERSION" >> /etc/environment
+
+# Build the plugin
+RUN cd /tmp/jellyfin-requests && \
+    dotnet publish --configuration Release --output="/jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION)" && \
+    chmod -R 755 /jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION)
+
+# Copy the entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Cleanup
-RUN apt-get remove -y wget jq unzip && \
+RUN apt-get remove -y dotnet-sdk-6.0 && \
     apt-get autoremove -y && \
     apt-get clean && \
-    rm -rf /tmp/*
-	
+    rm -rf /var/lib/apt/lists/* /tmp/jellyfin-requests
+
 ARG JELLYFIN_VERSION
 LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-server"
 LABEL "org.opencontainers.image.title"="Jellyfin with request"
@@ -230,7 +235,8 @@ LABEL "org.opencontainers.image.url"="https://jellyfin.org"
 
 EXPOSE 8096
 VOLUME ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR}
-ENTRYPOINT ["/jellyfin/jellyfin"]
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["/jellyfin/jellyfin"]
 
 HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
      CMD curl -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
