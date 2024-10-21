@@ -202,8 +202,17 @@ COPY jellyfin-requests /tmp/jellyfin-requests
 # Install dependencies for plugin and JSON parsing
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+    wget \
+    apt-transport-https \
+    software-properties-common && \
+    wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
+    dpkg -i packages-microsoft-prod.deb && \
+    rm packages-microsoft-prod.deb && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
     dotnet-sdk-8.0 \
-    jq
+    jq && \
+    rm -rf /var/lib/apt/lists/*
 
 # Extract the latest version from the manifest
 RUN LATEST_VERSION=$(jq -r '.[0].versions | sort_by(.timestamp) | reverse | .[0].version' /tmp/jellyfin-requests/manifest.json) && \
@@ -220,7 +229,7 @@ COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Cleanup
-RUN apt-get remove -y dotnet-sdk-8.0 && \
+RUN apt-get remove -y dotnet-sdk-8.0 jq && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/jellyfin-requests
