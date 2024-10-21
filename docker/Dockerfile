@@ -118,7 +118,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     JELLYFIN_CONFIG_DIR="/config/config" \
     JELLYFIN_LOG_DIR="/config/log" \
     JELLYFIN_WEB_DIR="/jellyfin/jellyfin-web" \
-    JELLYFIN_FFMPEG="/usr/lib/jellyfin-ffmpeg/ffmpeg"
+    JELLYFIN_FFMPEG="/usr/lib/jellyfin-ffmpeg/ffmpeg" \
 	JELLYFIN_PLUGIN_PATH="/usr/lib/jellyfin/plugins:${JELLYFIN_DATA_DIR}/plugins"
 
 # required for fontconfig cache
