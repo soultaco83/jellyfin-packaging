@@ -215,15 +215,11 @@ RUN apt-get update && \
 # Extract the latest version from the manifest and set as ENV
 RUN PLUGIN_VERSION=$(jq -r '.[0].versions | sort_by(.timestamp) | reverse | .[0].version' /tmp/jellyfin-requests/manifest.json) && \
     echo "Latest plugin version: $PLUGIN_VERSION" && \
-    # Verify the version was extracted correctly
-    test ! -z "$PLUGIN_VERSION" && \
-    # Set it as an environment variable
+    echo "$PLUGIN_VERSION" > /plugin_version && \
     export PLUGIN_VERSION=$PLUGIN_VERSION && \
-    # Make it persistent
-    echo "PLUGIN_VERSION=$PLUGIN_VERSION" >> /etc/environment && \
-    echo "export PLUGIN_VERSION=$PLUGIN_VERSION" >> /etc/profile.d/plugin_version.sh && \
-    # Verify the value
-    echo "Extracted version: $PLUGIN_VERSION"
+    # Use the version immediately for building
+    cd /tmp/jellyfin-requests && \
+    dotnet publish --configuration Release --output="/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}"
 
 # Set it explicitly as an ENV
 ENV PLUGIN_VERSION=${PLUGIN_VERSION}
@@ -273,6 +269,7 @@ LABEL "org.opencontainers.image.url"="https://jellyfin.org"
 
 EXPOSE 8096
 VOLUME ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR}
+ENV PLUGIN_VERSION=$(cat /plugin_version)
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["/jellyfin/jellyfin"]
 
