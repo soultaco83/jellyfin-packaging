@@ -18,24 +18,28 @@ fi
 
 echo "PLUGIN_VERSION: ${PLUGIN_VERSION}"
 
-# Verify source directory exists
-if [ ! -d "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" ]; then
-    echo "Error: Source directory /jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION} does not exist"
-    echo "Available directories in /jellyfin/plugins:"
-    ls -la /jellyfin/plugins
+# Verify source directory and DLL exist
+SOURCE_DIR="/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}"
+DLL_FILE="${SOURCE_DIR}/Jellyfin.Plugin.RequestsAddon.dll"
+
+if [ ! -f "$DLL_FILE" ]; then
+    echo "Error: DLL file not found at ${DLL_FILE}"
+    echo "Available files in source directory:"
+    ls -la "${SOURCE_DIR}"
     exit 1
 fi
 
-# Create directory with version
-mkdir -p "/config/plugins/RequestsAddon_${PLUGIN_VERSION}"
+# Create target directory
+TARGET_DIR="/config/plugins/RequestsAddon_${PLUGIN_VERSION}"
+mkdir -p "${TARGET_DIR}"
 
-echo "Copying plugin files..."
-cp -Rv "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}/"* "/config/plugins/RequestsAddon_${PLUGIN_VERSION}/"
-chown -R root:root "/config/plugins/RequestsAddon_${PLUGIN_VERSION}"
-chmod -R 777 "/config/plugins/RequestsAddon_${PLUGIN_VERSION}"
-echo "RequestsAddon plugin version ${PLUGIN_VERSION} installed or updated."
+echo "Copying plugin DLL..."
+cp -v "${DLL_FILE}" "${TARGET_DIR}/"
+chown root:root "${TARGET_DIR}/Jellyfin.Plugin.RequestsAddon.dll"
+chmod 755 "${TARGET_DIR}/Jellyfin.Plugin.RequestsAddon.dll"
+echo "RequestsAddon plugin DLL version ${PLUGIN_VERSION} installed or updated."
 
-echo "Final contents of /config/plugins:"
-ls -R /config/plugins
+echo "Final contents of plugin directory:"
+ls -l "${TARGET_DIR}"
 
 exec "$@"

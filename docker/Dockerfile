@@ -226,13 +226,14 @@ RUN cd /tmp/jellyfin-requests && \
     PLUGIN_VERSION=$(grep -oP 'PLUGIN_VERSION=\K.*' /etc/environment) && \
     echo "Building plugin version: $PLUGIN_VERSION" && \
     dotnet publish --configuration Release --output="/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" && \
-    echo "Plugin built. Contents of output directory:" && \
-    ls -R "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}"
+    echo "Plugin built. Verifying DLL:" && \
+    find "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" -name "Jellyfin.Plugin.RequestsAddon.dll"
 
-# Preserve plugin files
+# Preserve only the required DLL file
 RUN PLUGIN_VERSION=$(grep -oP 'PLUGIN_VERSION=\K.*' /etc/environment) && \
-    mkdir -p /preserved_plugins && \
-    cp -R "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" /preserved_plugins/
+    mkdir -p "/preserved_plugins/RequestsAddon_${PLUGIN_VERSION}" && \
+    find "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" -name "Jellyfin.Plugin.RequestsAddon.dll" \
+    -exec cp {} "/preserved_plugins/RequestsAddon_${PLUGIN_VERSION}/" \;
 
 # Copy the entrypoint script
 COPY docker/docker-entrypoint.sh /usr/local/bin/
