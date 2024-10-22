@@ -212,26 +212,26 @@ RUN apt-get update && \
     jq && \
     rm -rf /var/lib/apt/lists/*
 
-# Extract and set the plugin version
+# Extract and set the plugin version (replace the existing block)
 RUN PLUGIN_VERSION=$(jq -r '.[0].versions | sort_by(.timestamp) | reverse | .[0].version' /tmp/jellyfin-requests/manifest.json) && \
     echo "Latest plugin version: $PLUGIN_VERSION" && \
     echo "PLUGIN_VERSION=$PLUGIN_VERSION" >> /etc/environment && \
-    cd /tmp/jellyfin-requests && \
-    dotnet publish --configuration Release --output="/jellyfin/plugins/RequestsAddon_$PLUGIN_VERSION"
+    echo "Verifying /etc/environment content:" && \
+    cat /etc/environment && \
+    echo "Testing version extraction:" && \
+    grep -oP 'PLUGIN_VERSION=\K.*' /etc/environment
 
-# Set the environment variable for the container
-ENV PLUGIN_VERSION=$PLUGIN_VERSION
-
-# Build the plugin using the environment variable
+# Build the plugin using the version from environment
 RUN cd /tmp/jellyfin-requests && \
+    PLUGIN_VERSION=$(grep -oP 'PLUGIN_VERSION=\K.*' /etc/environment) && \
+    echo "Building plugin version: $PLUGIN_VERSION" && \
     dotnet publish --configuration Release --output="/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" && \
     echo "Plugin built. Contents of output directory:" && \
-    ls -R "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" && \
-    echo "All DLL files in /jellyfin/plugins:" && \
-    find /jellyfin/plugins -name "*.dll"
+    ls -R "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}"
 
 # Preserve plugin files
-RUN mkdir -p /preserved_plugins && \
+RUN PLUGIN_VERSION=$(grep -oP 'PLUGIN_VERSION=\K.*' /etc/environment) && \
+    mkdir -p /preserved_plugins && \
     cp -R "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" /preserved_plugins/
 
 # Copy the entrypoint script
