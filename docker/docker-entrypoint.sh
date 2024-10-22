@@ -1,9 +1,13 @@
 #!/bin/bash
 set -e
 
-echo "PLUGIN_VERSION: ${PLUGIN_VERSION}"
+echo "Debugging version information:"
+echo "PLUGIN_VERSION from ENV: ${PLUGIN_VERSION}"
+echo "Contents of /etc/environment:"
+cat /etc/environment
+echo "Contents of /etc/profile.d/plugin_version.sh:"
+cat /etc/profile.d/plugin_version.sh
 
-# No need to source /etc/environment anymore
 mkdir -p /config/plugins/RequestsAddon_${PLUGIN_VERSION}
 
 echo "Copying plugin files..."

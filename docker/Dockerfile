@@ -215,11 +215,17 @@ RUN apt-get update && \
 # Extract the latest version from the manifest and set as ENV
 RUN PLUGIN_VERSION=$(jq -r '.[0].versions | sort_by(.timestamp) | reverse | .[0].version' /tmp/jellyfin-requests/manifest.json) && \
     echo "Latest plugin version: $PLUGIN_VERSION" && \
+    # Verify the version was extracted correctly
+    test ! -z "$PLUGIN_VERSION" && \
+    # Set it as an environment variable
     export PLUGIN_VERSION=$PLUGIN_VERSION && \
+    # Make it persistent
     echo "PLUGIN_VERSION=$PLUGIN_VERSION" >> /etc/environment && \
-    # Make it available at runtime
-    echo "export PLUGIN_VERSION=$PLUGIN_VERSION" >> /etc/profile.d/plugin_version.sh
+    echo "export PLUGIN_VERSION=$PLUGIN_VERSION" >> /etc/profile.d/plugin_version.sh && \
+    # Verify the value
+    echo "Extracted version: $PLUGIN_VERSION"
 
+# Set it explicitly as an ENV
 ENV PLUGIN_VERSION=${PLUGIN_VERSION}
 
 # Build the plugin using the environment variable
