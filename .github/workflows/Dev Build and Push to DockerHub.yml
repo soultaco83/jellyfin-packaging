@@ -7,12 +7,30 @@ on:
         required: true
         type: string
         description: 'The server and web stable release tag ("vX.Y.Z") or "master"'
+  push:
+    branches:
+      - dev
+    paths-ignore:
+      - '**.md'
+      - '.github/**'
+      - '!.github/workflows/dev-build-and-push.yml'
 
 permissions:
   contents: read
 
 jobs:
+  check_branch:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check if running on dev branch
+        run: |
+          if [[ "${{ github.ref }}" != "refs/heads/dev" ]]; then
+            echo "Error: This workflow can only run on the dev branch"
+            exit 1
+          fi
+
   Docker:
+    needs: check_branch
     runs-on: ubuntu-22.04
     steps:
       - name: "Set version and release type"
