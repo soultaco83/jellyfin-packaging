@@ -18,6 +18,18 @@ fi
 
 echo "PLUGIN_VERSION: ${PLUGIN_VERSION}"
 
+# Check for and remove any existing RequestsAddon folders
+echo "Checking for existing RequestsAddon installations..."
+if ls /config/plugins/RequestsAddon_* 1> /dev/null 2>&1; then
+    echo "Found existing RequestsAddon installations:"
+    ls -ld /config/plugins/RequestsAddon_*
+    echo "Removing existing RequestsAddon installations..."
+    rm -rf /config/plugins/RequestsAddon_*
+    echo "Cleanup complete."
+else
+    echo "No existing RequestsAddon installations found."
+fi
+
 # Verify source directory and DLL exist
 SOURCE_DIR="/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}"
 DLL_FILE="${SOURCE_DIR}/Jellyfin.Plugin.RequestsAddon.dll"
