@@ -212,22 +212,27 @@ RUN apt-get update && \
     jq && \
     rm -rf /var/lib/apt/lists/*
 
-# Extract the latest version from the manifest
-RUN LATEST_VERSION=$(jq -r '.[0].versions | sort_by(.timestamp) | reverse | .[0].version' /tmp/jellyfin-requests/manifest.json) && \
-    echo "Latest plugin version: $LATEST_VERSION" && \
-    echo "PLUGIN_VERSION=$LATEST_VERSION" >> /etc/environment
+# Extract the latest version from the manifest and set as ENV
+RUN PLUGIN_VERSION=$(jq -r '.[0].versions | sort_by(.timestamp) | reverse | .[0].version' /tmp/jellyfin-requests/manifest.json) && \
+    echo "Latest plugin version: $PLUGIN_VERSION" && \
+    export PLUGIN_VERSION=$PLUGIN_VERSION && \
+    echo "PLUGIN_VERSION=$PLUGIN_VERSION" >> /etc/environment && \
+    # Make it available at runtime
+    echo "export PLUGIN_VERSION=$PLUGIN_VERSION" >> /etc/profile.d/plugin_version.sh
 
-# Build the plugin
+ENV PLUGIN_VERSION=${PLUGIN_VERSION}
+
+# Build the plugin using the environment variable
 RUN cd /tmp/jellyfin-requests && \
-    dotnet publish --configuration Release --output="/jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION)" && \
+    dotnet publish --configuration Release --output="/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" && \
     echo "Plugin built. Contents of output directory:" && \
-    ls -R /jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION) && \
+    ls -R "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" && \
     echo "All DLL files in /jellyfin/plugins:" && \
     find /jellyfin/plugins -name "*.dll"
 
 # Preserve plugin files
 RUN mkdir -p /preserved_plugins && \
-    cp -R /jellyfin/plugins/RequestsAddon_$(source /etc/environment && echo $PLUGIN_VERSION) /preserved_plugins/
+    cp -R "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" /preserved_plugins/
 
 # Copy the entrypoint script
 COPY docker/docker-entrypoint.sh /usr/local/bin/
