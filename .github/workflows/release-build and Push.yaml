@@ -6,8 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        required: true
+        required: false
         type: string
+        default: 'master'
         description: 'The server and web stable release tag ("vX.Y.Z") or "master"'
 
 permissions:
@@ -20,7 +21,7 @@ jobs:
       - name: "Set version and release type"
         id: version
         run: |
-          INPUT_VERSION=${{ inputs.version || 'master' }}
+          INPUT_VERSION=${{ inputs.version }}
           if [[ "$INPUT_VERSION" == "master" ]]; then
             echo "JELLYFIN_VERSION=$(date +'%Y%m%d%H')" >> $GITHUB_ENV
             echo "JELLYFIN_RELEASE_TYPE=unstable" >> $GITHUB_ENV
