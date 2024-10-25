@@ -210,7 +210,8 @@ RUN apt-get update && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
     dotnet-sdk-8.0 \
-    jq && \
+    jq \
+    sqlite3	&& \
     rm -rf /var/lib/apt/lists/*
 
 # Extract and set the plugin version (replace the existing block)
