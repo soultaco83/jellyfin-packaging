@@ -3,8 +3,9 @@ set -e
 
 # Create a marker file to detect container recreation and version changes
 CONTAINER_MARKER="/config/.container_marker"
-DOCKER_SHA_FILE="/config/.last_docker_sha"
-CURRENT_SHA="${IMAGE_ID:-unknown}"  # Get the SHA from environment variable
+DOCKER_BUILD_FILE="/config/.last_docker_build"
+# Use multiple files to generate a build signature
+CURRENT_BUILD_TIME=$(stat -c %Y /jellyfin/jellyfin.dll && stat -c %Y /jellyfin/jellyfin-web/index.html | sha256sum | cut -d' ' -f1)
 BACKUP_DIR="/config/backups"
 BACKUP_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 DB_FILES=(
@@ -71,29 +72,29 @@ perform_config_backup() {
 }
 
 # Debug info
-echo "Current Docker Image SHA: $CURRENT_SHA"
-if [ -f "$DOCKER_SHA_FILE" ]; then
-    echo "Previous Docker Image SHA: $(cat $DOCKER_SHA_FILE)"
+echo "Current Docker Build Signature: $CURRENT_BUILD_TIME"
+if [ -f "$DOCKER_BUILD_FILE" ]; then
+    echo "Previous Docker Build Signature: $(cat $DOCKER_BUILD_FILE)"
 fi
 
 # Check if this is a new container or docker update
 if [ ! -f "$CONTAINER_MARKER" ]; then
     perform_db_backup "New container detected"
     perform_config_backup
-    echo "$CURRENT_SHA" > "$DOCKER_SHA_FILE"
-elif [ -f "$DOCKER_SHA_FILE" ]; then
-    LAST_SHA=$(cat "$DOCKER_SHA_FILE")
-    if [ "$LAST_SHA" != "$CURRENT_SHA" ] && [ "$CURRENT_SHA" != "unknown" ]; then
-        perform_db_backup "Docker image update detected (SHA changed)"
+    echo "$CURRENT_BUILD_TIME" > "$DOCKER_BUILD_FILE"
+elif [ -f "$DOCKER_BUILD_FILE" ]; then
+    LAST_BUILD_TIME=$(cat "$DOCKER_BUILD_FILE")
+    if [ "$LAST_BUILD_TIME" != "$CURRENT_BUILD_TIME" ]; then
+        perform_db_backup "Docker image update detected (Build signature changed)"
         perform_config_backup
-        echo "$CURRENT_SHA" > "$DOCKER_SHA_FILE"
+        echo "$CURRENT_BUILD_TIME" > "$DOCKER_BUILD_FILE"
     else
         echo "Same Docker image detected, skipping backups..."
     fi
 else
     perform_db_backup "No Docker image history found"
     perform_config_backup
-    echo "$CURRENT_SHA" > "$DOCKER_SHA_FILE"
+    echo "$CURRENT_BUILD_TIME" > "$DOCKER_BUILD_FILE"
 fi
 
 # Update marker file
