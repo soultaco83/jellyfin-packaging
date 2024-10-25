@@ -3,8 +3,8 @@ set -e
 
 # Create a marker file to detect container recreation and version changes
 CONTAINER_MARKER="/config/.container_marker"
-VERSION_FILE="/config/.last_version"
-CURRENT_VERSION="${JELLYFIN_VERSION:-unknown}"
+DOCKER_VERSION_FILE="/config/.last_docker_version"
+CURRENT_DOCKER_VERSION=$(cat /jellyfin/jellyfin.dll | md5sum | cut -d' ' -f1)  # Use MD5 of jellyfin.dll as docker version identifier
 BACKUP_DIR="/config/backups"
 BACKUP_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 DB_FILES=(
@@ -70,29 +70,30 @@ perform_config_backup() {
     fi
 }
 
-# Check if this is a new container or version update
+# Check if this is a new container or docker update
 if [ ! -f "$CONTAINER_MARKER" ]; then
     perform_db_backup "New container detected"
     perform_config_backup
-    echo "$CURRENT_VERSION" > "$VERSION_FILE"
-elif [ -f "$VERSION_FILE" ]; then
-    LAST_VERSION=$(cat "$VERSION_FILE")
-    if [ "$LAST_VERSION" != "$CURRENT_VERSION" ]; then
-        perform_db_backup "Version update detected (${LAST_VERSION} -> ${CURRENT_VERSION})"
+    echo "$CURRENT_DOCKER_VERSION" > "$DOCKER_VERSION_FILE"
+elif [ -f "$DOCKER_VERSION_FILE" ]; then
+    LAST_DOCKER_VERSION=$(cat "$DOCKER_VERSION_FILE")
+    if [ "$LAST_DOCKER_VERSION" != "$CURRENT_DOCKER_VERSION" ]; then
+        perform_db_backup "Docker update detected (Version checksum changed)"
         perform_config_backup
-        echo "$CURRENT_VERSION" > "$VERSION_FILE"
+        echo "$CURRENT_DOCKER_VERSION" > "$DOCKER_VERSION_FILE"
     else
-        echo "Same version detected, skipping backups..."
+        echo "Same Docker version detected, skipping backups..."
     fi
 else
-    perform_db_backup "No version history found"
+    perform_db_backup "No Docker version history found"
     perform_config_backup
-    echo "$CURRENT_VERSION" > "$VERSION_FILE"
+    echo "$CURRENT_DOCKER_VERSION" > "$DOCKER_VERSION_FILE"
 fi
 
 # Update marker file
 touch "$CONTAINER_MARKER"
 
+# Rest of your existing entrypoint script...
 # Get plugin version silently
 PLUGIN_VERSION=$(grep -oP 'PLUGIN_VERSION=\K.*' /etc/environment)
 
