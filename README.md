@@ -1,3 +1,4 @@
+DUE TO MASS UPCOMING CHANGES PAUSING WEEKLY RELEASE. MOVING TO DEV UNTIL TESTING IS COMPLETE
 <h1 align="center">Jellyfin Packaging</h1>
 <h3 align="center">Part of Jellyfin: The Free Software Media System</h3>
 
