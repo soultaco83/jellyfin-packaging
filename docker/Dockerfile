@@ -54,7 +54,8 @@ RUN apk add \
     gcc \
     musl-dev \
     nasm \
-    python3
+    python3 \
+    git
 
 WORKDIR ${SOURCE_DIR}
 COPY jellyfin-web .
@@ -274,4 +275,8 @@ ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["/jellyfin/jellyfin"]
 
 HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
+<<<<<<< HEAD
      CMD curl -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
+=======
+     CMD curl --noproxy 'localhost' -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
+>>>>>>> upstream/master
