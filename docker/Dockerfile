@@ -1,5 +1,5 @@
 # Docker build arguments
-ARG DOTNET_VERSION=8.0
+ARG DOTNET_VERSION=9.0
 ARG NODEJS_VERSION=20
 
 # Combined image version (Debian)
@@ -212,7 +212,7 @@ RUN apt-get update && \
     rm packages-microsoft-prod.deb && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-    dotnet-sdk-8.0 \
+    dotnet-sdk-9.0 \
     jq \
     sqlite3	&& \
     rm -rf /var/lib/apt/lists/*
@@ -245,7 +245,7 @@ COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Cleanup
-RUN apt-get remove -y dotnet-sdk-8.0 jq && \
+RUN apt-get remove -y dotnet-sdk-9.0 jq && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/jellyfin-requests && \
