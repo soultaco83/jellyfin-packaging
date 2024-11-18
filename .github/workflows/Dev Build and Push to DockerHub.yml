@@ -45,6 +45,11 @@ jobs:
           echo "Set JELLYFIN_VERSION: ${{ env.JELLYFIN_VERSION }}"
           echo "Set JELLYFIN_RELEASE_TYPE: ${{ env.JELLYFIN_RELEASE_TYPE }}"
 
+      - name: Setup .NET SDK 9.0
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '9.0.x-preview.1'
+
       - name: "Install dependencies"
         run: |
           sudo apt-get update
@@ -67,6 +72,11 @@ jobs:
           ls -la
           echo "Contents of docker directory (if exists):"
           ls -la docker/ || echo "docker directory not found"
+          
+      - name: Verify .NET SDK Version
+        run: |
+          dotnet --list-sdks
+          dotnet --info
 
       - name: Set permissions for docker-entrypoint.sh
         run: chmod +x docker/docker-entrypoint.sh
