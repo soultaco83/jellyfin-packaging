@@ -1,5 +1,5 @@
 # Docker build arguments
-ARG DOTNET_VERSION=9.0
+ARG DOTNET_VERSION=8.0
 ARG NODEJS_VERSION=20
 
 # Combined image version (Debian)
@@ -161,6 +161,9 @@ RUN apt-get update \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
 # Intel VAAPI Tone mapping dependencies:
+# Prefer NEO to Beignet since the latter one doesn't support Comet Lake or newer for now.
+# Do not use the intel-opencl-icd package from repo since they will not build with RELEASE_WITH_REGKEYS enabled.
+# https://github.com/intel/compute-runtime/releases
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     mkdir intel-compute-runtime \
  && cd intel-compute-runtime \
@@ -212,7 +215,7 @@ RUN apt-get update && \
     rm packages-microsoft-prod.deb && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-    dotnet-sdk-9.0 \
+    dotnet-sdk-8.0 \
     jq \
     sqlite3	&& \
     rm -rf /var/lib/apt/lists/*
@@ -245,7 +248,7 @@ COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Cleanup
-RUN apt-get remove -y dotnet-sdk-9.0 jq && \
+RUN apt-get remove -y dotnet-sdk-8.0 jq && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/jellyfin-requests && \
@@ -264,7 +267,7 @@ RUN echo "Contents of /jellyfin/plugins after cleanup:" && \
 RUN chmod -R 755 /jellyfin/plugins
 
 ARG JELLYFIN_VERSION
-LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-server"
+LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-packaging"
 LABEL "org.opencontainers.image.title"="Jellyfin with request"
 LABEL "org.opencontainers.image.description"="The Free Software Media System"
 LABEL "org.opencontainers.image.documentation"="https://jellyfin.org/docs/"
@@ -277,8 +280,4 @@ ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["/jellyfin/jellyfin"]
 
 HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
-<<<<<<< HEAD
-     CMD curl -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
-=======
      CMD curl --noproxy 'localhost' -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
->>>>>>> upstream/master
