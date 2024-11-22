@@ -1,5 +1,5 @@
 # Docker build arguments
-ARG DOTNET_VERSION=8.0
+ARG DOTNET_VERSION=9.0
 ARG NODEJS_VERSION=20
 
 # Combined image version (Debian)
@@ -80,6 +80,9 @@ ARG ARTIFACT_DIR=/server
 WORKDIR ${SOURCE_DIR}
 COPY jellyfin-server .
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
+
+# Add global.json override if needed
+RUN dotnet new globaljson --sdk-version 9.0.0 --force
 
 RUN dotnet publish Jellyfin.Server --configuration Release \
     --output="${ARTIFACT_DIR}" --self-contained \
