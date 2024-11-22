@@ -36,6 +36,7 @@ RUN apt-get update -y \
     gnupg \
     devscripts \
     build-essential \
+    git \
     mmv \
     lsb-release \
     libssl*.* \
@@ -46,7 +47,8 @@ RUN apt-get update -y \
     libssl-dev \
  && apt-get clean autoclean -y \
  && apt-get autoremove -y \
- && rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/*
+ && rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/* \
+ && git config --global --add safe.directory /jellyfin/jellyfin-web
 
 # Prepare the cross-toolchain
 RUN if test "${PACKAGE_ARCH}" != "$( dpkg --print-architecture )"; then \
@@ -115,8 +117,7 @@ RUN wget https://deb.nodesource.com/setup_${NODEJS_VERSION}.x -O nodejs-install.
     nodejs
 
 # Clean up dependencies
-RUN apt-get remove wget -y \
- && apt-get clean autoclean -y \
+RUN apt-get clean autoclean -y \
  && apt-get autoremove -y \
  && rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/*
 

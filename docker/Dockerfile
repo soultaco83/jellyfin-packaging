@@ -1,5 +1,5 @@
 # Docker build arguments
-ARG DOTNET_VERSION=8.0
+ARG DOTNET_VERSION=9.0
 ARG NODEJS_VERSION=20
 
 # Combined image version (Debian)
@@ -25,8 +25,10 @@ ARG PACKAGE_ARCH
 ARG DOTNET_ARCH
 # QEMU architecture (x86_64, aarch64, arm), set by build script
 ARG QEMU_ARCH
-# Base Image archiecture (amd64, arm64v8, arm32v7), set by build script
+# Base Image architecture (amd64, arm64v8, arm32v7), set by build script
 ARG IMAGE_ARCH
+# Target platform architecture (amd64, arm64/v8, arm/v7), set by build script
+ARG TARGET_ARCH
 
 # Jellyfin version
 ARG JELLYFIN_VERSION
@@ -54,7 +56,9 @@ RUN apk add \
     gcc \
     musl-dev \
     nasm \
-    python3
+    python3 \
+    git \
+ && git config --global --add safe.directory /jellyfin/jellyfin-web
 
 WORKDIR ${SOURCE_DIR}
 COPY jellyfin-web .
@@ -77,6 +81,9 @@ WORKDIR ${SOURCE_DIR}
 COPY jellyfin-server .
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 
+# Add global.json override if needed
+RUN dotnet new globaljson --sdk-version 9.0.0 --force
+
 RUN dotnet publish Jellyfin.Server --configuration Release \
     --output="${ARTIFACT_DIR}" --self-contained \
     --runtime linux-${DOTNET_ARCH} -p:DebugSymbols=false -p:DebugType=none
@@ -85,7 +92,7 @@ RUN dotnet publish Jellyfin.Server --configuration Release \
 # Build the final combined image
 #
 FROM multiarch/qemu-user-static:x86_64-${QEMU_ARCH} as qemu
-FROM ${IMAGE_ARCH}/debian:${OS_VERSION}-slim as combined
+FROM --platform=linux/${TARGET_ARCH} ${IMAGE_ARCH}/debian:${OS_VERSION}-slim as combined
 
 ARG OS_VERSION
 ARG FFMPEG_PACKAGE
@@ -158,6 +165,9 @@ RUN apt-get update \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
 # Intel VAAPI Tone mapping dependencies:
+# Prefer NEO to Beignet since the latter one doesn't support Comet Lake or newer for now.
+# Do not use the intel-opencl-icd package from repo since they will not build with RELEASE_WITH_REGKEYS enabled.
+# https://github.com/intel/compute-runtime/releases
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     mkdir intel-compute-runtime \
  && cd intel-compute-runtime \
@@ -261,7 +271,7 @@ RUN echo "Contents of /jellyfin/plugins after cleanup:" && \
 RUN chmod -R 755 /jellyfin/plugins
 
 ARG JELLYFIN_VERSION
-LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-server"
+LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-packaging"
 LABEL "org.opencontainers.image.title"="Jellyfin with request"
 LABEL "org.opencontainers.image.description"="The Free Software Media System"
 LABEL "org.opencontainers.image.documentation"="https://jellyfin.org/docs/"
@@ -274,4 +284,4 @@ ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["/jellyfin/jellyfin"]
 
 HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
-     CMD curl -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
+     CMD curl --noproxy 'localhost' -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
