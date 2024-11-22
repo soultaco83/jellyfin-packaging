@@ -41,9 +41,12 @@ jobs:
             echo "Invalid version input"
             exit 1
           fi
+          # Set today's date for image tags
+          echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
           echo "Input version: $INPUT_VERSION"
           echo "Set JELLYFIN_VERSION: ${{ env.JELLYFIN_VERSION }}"
           echo "Set JELLYFIN_RELEASE_TYPE: ${{ env.JELLYFIN_RELEASE_TYPE }}"
+          echo "Set BUILD_DATE: ${{ env.BUILD_DATE }}"
 
       - name: "Install dependencies"
         run: |
@@ -95,24 +98,36 @@ jobs:
           for ARCH in "${ARCHITECTURES[@]}"; do
             SOURCE_IMAGE="soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}-${ARCH}"
             DEV_IMAGE="soultaco83/jellyfin_with_request:dev-${ARCH}"
+            DATE_DEV_IMAGE="soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev-${ARCH}"
             
             echo "Attempting to push image for ${ARCH}"
             if docker image inspect "${SOURCE_IMAGE}" &> /dev/null; then
+              # Tag with dev branch
               echo "Tagging image for dev branch..."
               docker tag "${SOURCE_IMAGE}" "${DEV_IMAGE}"
-              echo "Pushing dev image for ${ARCH}..."
               docker push "${DEV_IMAGE}"
+              
+              # Tag with date-dev
+              echo "Tagging image with date-dev..."
+              docker tag "${SOURCE_IMAGE}" "${DATE_DEV_IMAGE}"
+              docker push "${DATE_DEV_IMAGE}"
             else
               echo "Warning: Docker image ${SOURCE_IMAGE} not found. Skipping."
             fi
           done
 
-      - name: Create and Push Dev Multi-Arch Manifest
+      - name: Create and Push Dev Multi-Arch Manifests
         run: |
-          MANIFEST_NAME="soultaco83/jellyfin_with_request:dev"
-          echo "Creating dev multi-arch manifest ${MANIFEST_NAME}"
-          docker manifest create "${MANIFEST_NAME}" \
+          # Create and push regular dev manifest
+          DEV_MANIFEST="soultaco83/jellyfin_with_request:dev"
+          echo "Creating dev multi-arch manifest ${DEV_MANIFEST}"
+          docker manifest create "${DEV_MANIFEST}" \
             "soultaco83/jellyfin_with_request:dev-amd64"
+          docker manifest push "${DEV_MANIFEST}"
           
-          echo "Pushing dev multi-arch manifest"
-          docker manifest push "${MANIFEST_NAME}"
+          # Create and push date-based dev manifest
+          DATE_DEV_MANIFEST="soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev"
+          echo "Creating date-dev multi-arch manifest ${DATE_DEV_MANIFEST}"
+          docker manifest create "${DATE_DEV_MANIFEST}" \
+            "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev-amd64"
+          docker manifest push "${DATE_DEV_MANIFEST}"
