@@ -41,7 +41,6 @@ jobs:
             echo "Invalid version input"
             exit 1
           fi
-          # Set today's date for image tags
           echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
           echo "Input version: $INPUT_VERSION"
           echo "Set JELLYFIN_VERSION: ${{ env.JELLYFIN_VERSION }}"
@@ -94,40 +93,34 @@ jobs:
 
       - name: Push to Docker Hub
         run: |
-          ARCHITECTURES=("amd64")
-          for ARCH in "${ARCHITECTURES[@]}"; do
-            SOURCE_IMAGE="soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}-${ARCH}"
-            DEV_IMAGE="soultaco83/jellyfin_with_request:dev-${ARCH}"
-            DATE_DEV_IMAGE="soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev-${ARCH}"
-            
-            echo "Attempting to push image for ${ARCH}"
-            if docker image inspect "${SOURCE_IMAGE}" &> /dev/null; then
-              # Tag with dev branch
-              echo "Tagging image for dev branch..."
-              docker tag "${SOURCE_IMAGE}" "${DEV_IMAGE}"
-              docker push "${DEV_IMAGE}"
-              
-              # Tag with date-dev
-              echo "Tagging image with date-dev..."
-              docker tag "${SOURCE_IMAGE}" "${DATE_DEV_IMAGE}"
-              docker push "${DATE_DEV_IMAGE}"
-            else
-              echo "Warning: Docker image ${SOURCE_IMAGE} not found. Skipping."
-            fi
-          done
+          # Get the source image that was built
+          SOURCE_IMAGE="jellyfin/jellyfin:${{ env.JELLYFIN_VERSION }}-amd64"
+          
+          # Tag and push with dev tag
+          echo "Tagging and pushing dev image..."
+          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:dev-amd64"
+          docker push "soultaco83/jellyfin_with_request:dev-amd64"
+          
+          # Tag and push with date-dev tag
+          echo "Tagging and pushing date-dev image..."
+          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev-amd64"
+          docker push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev-amd64"
+
+      - name: Wait for image availability
+        run: |
+          # Add a small delay to ensure images are available
+          sleep 30
 
       - name: Create and Push Dev Multi-Arch Manifests
         run: |
           # Create and push regular dev manifest
-          DEV_MANIFEST="soultaco83/jellyfin_with_request:dev"
-          echo "Creating dev multi-arch manifest ${DEV_MANIFEST}"
-          docker manifest create "${DEV_MANIFEST}" \
+          echo "Creating dev multi-arch manifest..."
+          docker manifest create "soultaco83/jellyfin_with_request:dev" \
             "soultaco83/jellyfin_with_request:dev-amd64"
-          docker manifest push "${DEV_MANIFEST}"
+          docker manifest push "soultaco83/jellyfin_with_request:dev"
           
           # Create and push date-based dev manifest
-          DATE_DEV_MANIFEST="soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev"
-          echo "Creating date-dev multi-arch manifest ${DATE_DEV_MANIFEST}"
-          docker manifest create "${DATE_DEV_MANIFEST}" \
+          echo "Creating date-dev multi-arch manifest..."
+          docker manifest create "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev" \
             "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev-amd64"
-          docker manifest push "${DATE_DEV_MANIFEST}"
+          docker manifest push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev"
