@@ -18,7 +18,7 @@ docker:
 frameworks:
   jellyfin-server:
     DOTNET_VERSION:
-      master: "9.0"  # Using 8.0 as default for master
+      master: "9.0.100"  # Using 8.0 as default for master
       HEAD: "8.0"    # Fallback version
 
 # Nuget packages
