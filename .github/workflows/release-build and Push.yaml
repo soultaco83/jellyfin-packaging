@@ -85,7 +85,7 @@ jobs:
       - name: Push to Docker Hub
         run: |
           # Find the actual image name from the build
-          SOURCE_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ env.JELLYFIN_VERSION }}-amd64" | head -n 1)
+          SOURCE_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ env.JELLYFIN_VERSION }}" | head -n 1)
           
           if [ -z "$SOURCE_IMAGE" ]; then
             echo "Error: Could not find the source image"
@@ -97,13 +97,13 @@ jobs:
           
           # Tag and push with latest tag
           echo "Tagging and pushing latest image..."
-          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:latest-amd64"
-          docker push "soultaco83/jellyfin_with_request:latest-amd64"
+          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:latest"
+          docker push "soultaco83/jellyfin_with_request:latest"
           
           # Tag and push with date tag
           echo "Tagging and pushing date image..."
-          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-amd64"
-          docker push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-amd64"
+          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}"
+          docker push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}"
 
       - name: Wait for image availability
         run: |
