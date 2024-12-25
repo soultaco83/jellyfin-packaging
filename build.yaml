@@ -14,6 +14,13 @@ docker:
   dockerfile: docker/Dockerfile
   imagename: soultaco83/jellyfin
 
+# Framework versions configuration
+frameworks:
+  jellyfin-server:
+    DOTNET_VERSION:
+      master: "9.0.100"  # Using 8.0 as default for master
+      HEAD: "8.0"    # Fallback version
+
 # Nuget packages
 nuget:
   build_function: build_nuget
