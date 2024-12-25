@@ -32,9 +32,11 @@ jobs:
             echo "Invalid version input"
             exit 1
           fi
+          echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
           echo "Input version: $INPUT_VERSION"
           echo "Set JELLYFIN_VERSION: ${{ env.JELLYFIN_VERSION }}"
           echo "Set JELLYFIN_RELEASE_TYPE: ${{ env.JELLYFIN_RELEASE_TYPE }}"
+          echo "Set BUILD_DATE: ${{ env.BUILD_DATE }}"
 
       - name: "Install dependencies"
         run: |
@@ -82,46 +84,42 @@ jobs:
 
       - name: Push to Docker Hub
         run: |
-          ARCHITECTURES=("amd64")
-          for ARCH in "${ARCHITECTURES[@]}"; do
-            SOURCE_IMAGE="soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}-${ARCH}"
-            
-            echo "Attempting to push image for ${ARCH}"
-            if docker image inspect "${SOURCE_IMAGE}" &> /dev/null; then
-              echo "Pushing image for ${ARCH}..."
-              docker push "${SOURCE_IMAGE}"
-            else
-              echo "Warning: Docker image ${SOURCE_IMAGE} not found. Skipping."
-            fi
-          done
+          # Find the actual image name from the build
+          SOURCE_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ env.JELLYFIN_VERSION }}-amd64" | head -n 1)
+          
+          if [ -z "$SOURCE_IMAGE" ]; then
+            echo "Error: Could not find the source image"
+            docker images
+            exit 1
+          fi
+          
+          echo "Found source image: ${SOURCE_IMAGE}"
+          
+          # Tag and push with latest tag
+          echo "Tagging and pushing latest image..."
+          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:latest-amd64"
+          docker push "soultaco83/jellyfin_with_request:latest-amd64"
+          
+          # Tag and push with date tag
+          echo "Tagging and pushing date image..."
+          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-amd64"
+          docker push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-amd64"
 
-      - name: Create and Push Multi-Arch Manifest
+      - name: Wait for image availability
         run: |
-          MANIFEST_NAME="soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}"
-          echo "Creating multi-arch manifest ${MANIFEST_NAME}"
-          docker manifest create "${MANIFEST_NAME}" \
-            "soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}-amd64"
-          
-          echo "Pushing multi-arch manifest"
-          docker manifest push "${MANIFEST_NAME}"
+          # Add a small delay to ensure images are available
+          sleep 30
 
-      - name: Tag and Push Latest
+      - name: Create and Push Multi-Arch Manifests
         run: |
-          SOURCE_IMAGE="soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}-amd64"
-          LATEST_IMAGE="soultaco83/jellyfin_with_request:latest"
+          # Create and push latest manifest
+          echo "Creating latest multi-arch manifest..."
+          docker manifest create "soultaco83/jellyfin_with_request:latest" \
+            "soultaco83/jellyfin_with_request:latest-amd64"
+          docker manifest push "soultaco83/jellyfin_with_request:latest"
           
-          echo "Tagging ${SOURCE_IMAGE} as latest"
-          docker tag "${SOURCE_IMAGE}" "${LATEST_IMAGE}"
-          
-          echo "Pushing latest image"
-          docker push "${LATEST_IMAGE}"
-
-      - name: Create and Push Latest Multi-Arch Manifest
-        run: |
-          LATEST_MANIFEST="soultaco83/jellyfin_with_request:latest"
-          echo "Creating latest multi-arch manifest"
-          docker manifest create "${LATEST_MANIFEST}" \
-            "soultaco83/jellyfin_with_request:${{ env.JELLYFIN_VERSION }}-amd64"
-          
-          echo "Pushing latest multi-arch manifest"
-          docker manifest push "${LATEST_MANIFEST}"
+          # Create and push date-based manifest
+          echo "Creating date multi-arch manifest..."
+          docker manifest create "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}" \
+            "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-amd64"
+          docker manifest push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}"
