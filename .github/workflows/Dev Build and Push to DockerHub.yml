@@ -104,20 +104,14 @@ jobs:
           
           echo "Found source image: ${SOURCE_IMAGE}"
           
-          # Tag the image locally (but don't push)
+          # Tag the image for manifest use
           echo "Tagging local images..."
-          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:local-amd64"
+          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:manifest-local"
 
       - name: Create and Push Multi-Arch Manifests
         run: |
-          # Create and push dev manifest
-          echo "Creating dev multi-arch manifest..."
-          docker manifest create "soultaco83/jellyfin_with_request:dev" \
-            --amend "soultaco83/jellyfin_with_request:local-amd64"
-          docker manifest push "soultaco83/jellyfin_with_request:dev"
-          
-          # Create and push date-based dev manifest
+          # Create and push only the date-based dev manifest
           echo "Creating date-dev multi-arch manifest..."
-          docker manifest create "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev" \
-            --amend "soultaco83/jellyfin_with_request:local-amd64"
-          docker manifest push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev"
+          docker manifest create "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}" \
+            --amend "soultaco83/jellyfin_with_request:manifest-local"
+          docker manifest push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}"
