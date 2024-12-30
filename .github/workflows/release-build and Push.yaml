@@ -37,12 +37,10 @@ jobs:
           echo "Set JELLYFIN_VERSION: ${{ env.JELLYFIN_VERSION }}"
           echo "Set JELLYFIN_RELEASE_TYPE: ${{ env.JELLYFIN_RELEASE_TYPE }}"
           echo "Set BUILD_DATE: ${{ env.BUILD_DATE }}"
-
       - name: "Install dependencies"
         run: |
           sudo apt-get update
           sudo apt-get install --yes python3-git python3-yaml
-
       - name: "Checkout repository"
         uses: actions/checkout@v3
         with:
@@ -51,7 +49,6 @@ jobs:
       - name: "Prepare repository"
         run: |
           ./checkout.py ${{ inputs.version || 'master' }}
-
       - name: List directory contents
         run: |
           echo "Current working directory:"
@@ -60,7 +57,6 @@ jobs:
           ls -la
           echo "Contents of docker directory (if exists):"
           ls -la docker/ || echo "docker directory not found"
-
       - name: Set permissions for docker-entrypoint.sh
         run: chmod +x docker/docker-entrypoint.sh
 
@@ -72,7 +68,6 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
           sudo --preserve-env ./build.py ${{ env.JELLYFIN_VERSION }} docker amd64 --local
-
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
@@ -85,7 +80,7 @@ jobs:
       - name: Push to Docker Hub
         run: |
           # Find the actual image name from the build
-          SOURCE_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ env.JELLYFIN_VERSION }}" | head -n 1)
+          SOURCE_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ env.JELLYFIN_VERSION }}-amd64" | head -n 1)
           
           if [ -z "$SOURCE_IMAGE" ]; then
             echo "Error: Could not find the source image"
@@ -97,19 +92,17 @@ jobs:
           
           # Tag and push with latest tag
           echo "Tagging and pushing latest image..."
-          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:latest"
-          docker push "soultaco83/jellyfin_with_request:latest"
+          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:latest-amd64"
+          docker push "soultaco83/jellyfin_with_request:latest-amd64"
           
           # Tag and push with date tag
           echo "Tagging and pushing date image..."
-          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}"
-          docker push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}"
-
+          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-amd64"
+          docker push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-amd64"
       - name: Wait for image availability
         run: |
           # Add a small delay to ensure images are available
           sleep 30
-
       - name: Create and Push Multi-Arch Manifests
         run: |
           # Create and push latest manifest
