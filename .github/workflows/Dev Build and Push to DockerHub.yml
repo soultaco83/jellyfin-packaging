@@ -94,7 +94,7 @@ jobs:
       - name: Create and Push Multi-Arch Manifests
         run: |
           # Find the actual image name from the build
-          SOURCE_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "2025011010" | head -n 1)
+          SOURCE_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ env.JELLYFIN_VERSION }}" | head -n 1)
           
           if [ -z "$SOURCE_IMAGE" ]; then
             echo "Error: Could not find the source image"
@@ -109,8 +109,8 @@ jobs:
           
           # Create and push the date-based dev manifest directly from source 
           echo "Creating date-based dev manifest..."
-          docker tag "${SOURCE_IMAGE}" "***/jellyfin_with_request:20250110-dev"
-          docker push "***/jellyfin_with_request:20250110-dev"
+          docker tag "${SOURCE_IMAGE}" "***/jellyfin_with_request:${{ env.BUILD_DATE }}-dev"
+          docker push "***/jellyfin_with_request:${{ env.BUILD_DATE }}-dev"
           
           # Create and push the dev manifest directly from source
           echo "Creating dev manifest..."
