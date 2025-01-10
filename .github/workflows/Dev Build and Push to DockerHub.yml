@@ -107,11 +107,27 @@ jobs:
           # Tag the image for manifest use
           echo "Tagging local images..."
           docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:manifest-local"
+          
+          # Verify the tag was created
+          docker images | grep manifest-local || {
+            echo "Error: Failed to create manifest-local tag"
+            exit 1
+          }
 
       - name: Create and Push Multi-Arch Manifests
         run: |
-          # Create and push only the date-based dev manifest
-          echo "Creating date-dev multi-arch manifest..."
-          docker manifest create "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}" \
+          # List available images first
+          echo "Available Docker images:"
+          docker images
+          
+          # Create and push the date-based dev manifest
+          echo "Creating date-based dev manifest..."
+          docker manifest create "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev" \
             --amend "soultaco83/jellyfin_with_request:manifest-local"
-          docker manifest push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}"
+          docker manifest push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev"
+          
+          # Create and push the dev manifest
+          echo "Creating dev manifest..."
+          docker manifest create "soultaco83/jellyfin_with_request:dev" \
+            --amend "soultaco83/jellyfin_with_request:manifest-local"
+          docker manifest push "soultaco83/jellyfin_with_request:dev"
