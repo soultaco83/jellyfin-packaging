@@ -120,6 +120,10 @@ jobs:
           echo "Available Docker images:"
           docker images
           
+          # Push the local image to Docker Hub first
+          echo "Pushing local image to Docker Hub..."
+          docker push "soultaco83/jellyfin_with_request:manifest-local"
+          
           # Create and push the date-based dev manifest
           echo "Creating date-based dev manifest..."
           docker manifest create "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev" \
