@@ -109,10 +109,11 @@ jobs:
           
           # Create and push the date-based dev manifest directly from source
           echo "Creating date-based dev manifest..."
-          docker tag "${SOURCE_IMAGE}" "***/jellyfin:${BUILD_DATE}-dev"
-          docker push "***/jellyfin:${BUILD_DATE}-dev"
+          docker tag "${SOURCE_IMAGE}" "***/jellyfin:${{ env.BUILD_DATE }}-dev"
+          docker push "***/jellyfin:${{ env.BUILD_DATE }}-dev"
           
           # Create and push the dev manifest directly from source
           echo "Creating dev manifest..."
           docker tag "${SOURCE_IMAGE}" "***/jellyfin:dev"
           docker push "***/jellyfin:dev"
+          
