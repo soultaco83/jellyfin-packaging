@@ -55,7 +55,7 @@ for submodule in submodules.keys():
     if target_release == "master":
         target_head = "origin/master"
     else:
-        if submodule in ["jellyfin-server-windows", "jellyfin-requests"]:
+        if submodule in ["jellyfin-requests"]:
             target_head = "origin/master"
         else:
             target_head = f"refs/tags/{target_release}"
