@@ -41,7 +41,7 @@ perform_db_backup() {
             echo "Database backup created successfully at ${BACKUP_DIR}/jellyfinDB-${BACKUP_TIMESTAMP}.zip"
             
             # Keep only the last 5 database backups
-            find "${BACKUP_DIR}" -name "jellyfinDB-*.zip" -type f | sort -r | tail -n +6 | xargs rm -f 2>/dev/null || true
+            find "${BACKUP_DIR}" -name "jellyfinDB-*.zip" -type f -printf '%T@ %p\n' | sort -rn | tail -n +16 | cut -d' ' -f2- | xargs rm -f 2>/dev/null || true
         else
             echo "Warning: Database backup creation failed, but continuing with container startup"
         fi
