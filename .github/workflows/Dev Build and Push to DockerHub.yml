@@ -1,8 +1,6 @@
 name: "DEV Build and Push to DockerHub"
 
 on:
-  schedule:
-    - cron: '0 3 * * 6'
   workflow_dispatch:
     inputs:
       version:
