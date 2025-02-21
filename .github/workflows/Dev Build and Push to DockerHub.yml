@@ -35,6 +35,7 @@ jobs:
           echo "Set JELLYFIN_VERSION: ${{ env.JELLYFIN_VERSION }}"
           echo "Set JELLYFIN_RELEASE_TYPE: ${{ env.JELLYFIN_RELEASE_TYPE }}"
           echo "Set BUILD_DATE: ${{ env.BUILD_DATE }}"
+
       - name: "Install dependencies"
         run: |
           sudo apt-get update
@@ -44,6 +45,8 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: "Prepare repository"
+        id: prep
+        continue-on-error: true
         run: |-
           ./checkout.py ${{ inputs.version || 'master' }}
           
@@ -55,10 +58,13 @@ jobs:
           ls -la
           echo "Contents of docker directory (if exists):"
           ls -la docker/ || echo "docker directory not found"
+
       - name: Set permissions for docker-entrypoint.sh
         run: chmod +x docker/docker-entrypoint.sh
 
       - name: "Run builder for Docker containers"
+        id: build
+        continue-on-error: true
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
@@ -66,7 +72,10 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
           sudo --preserve-env ./build.py ${{ env.JELLYFIN_VERSION }} docker amd64 --local
+
       - name: Log in to Docker Hub
+        id: login
+        continue-on-error: true
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -76,6 +85,8 @@ jobs:
         run: docker images
 
       - name: Push to Docker Hub
+        id: push
+        continue-on-error: true
         run: |
           SOURCE_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ env.JELLYFIN_VERSION }}-amd64" | head -n 1)
           
@@ -97,3 +108,15 @@ jobs:
       - name: Wait for image availability
         run: |
           sleep 30
+
+      - name: Send Discord notification on failure
+        if: failure()
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: |
+            ❌ Docker build or push failed for DEV!
+            Version: ${{ env.JELLYFIN_VERSION }}
+            Type: ${{ env.JELLYFIN_RELEASE_TYPE }}
+            Please check the GitHub Actions logs for more details.
