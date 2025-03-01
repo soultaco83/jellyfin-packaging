@@ -43,6 +43,24 @@ jobs:
 
       - name: "Checkout repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false  # Don't fetch submodules automatically
+
+      - name: "Clean and initialize submodules"
+        run: |
+          # Find all submodule directories and remove them
+          if [ -f .gitmodules ]; then
+            echo "Cleaning existing submodules..."
+            git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | 
+            while read path_key path; do
+              echo "Removing submodule at $path"
+              rm -rf "$path"
+            done
+          fi
+          
+          # Initialize and update submodules
+          echo "Initializing submodules..."
+          git submodule update --init
 
       - name: "Prepare repository"
         id: prep
