@@ -1,6 +1,8 @@
 name: "DEV Build and Push to DockerHub"
 
 on:
+  schedule:
+    - cron: '0 11 * * 0'  # Runs at 6AM EST sunday
   workflow_dispatch:
     inputs:
       version:
@@ -48,25 +50,13 @@ jobs:
 
       - name: "Clean and initialize submodules"
         run: |
-          # Explicit removal of known submodule directories
-          echo "Removing specific submodule directories..."
-          rm -rf jellyfin-requests
-          rm -rf jellyfin-server
-          rm -rf jellyfin-server-windows
-          rm -rf jellyfin-web
-          
-          # List directories after removal
-          echo "Directory contents after removal:"
-          ls -la
-          
-          # Forcefully reset the submodule configuration
+          # Forcefully reset the submodule configuration without removing directories
           echo "Resetting submodule configuration..."
           git submodule deinit --force --all
           
-          # Re-initialize and update submodules
-          echo "Re-initializing submodules..."
-          git submodule init
-          git submodule update --recursive --remote
+          # Force full re-clone of submodules rather than using existing directories
+          echo "Re-cloning submodules from scratch..."
+          git submodule update --init --recursive --force
           
           # List updated submodules
           echo "Submodule status after update:"
@@ -76,7 +66,32 @@ jobs:
         id: prep
         continue-on-error: true
         run: |-
-          ./checkout.py ${{ inputs.version || 'master' }}
+          # If checkout.py fails, we'll handle it with a more direct approach
+          ./checkout.py ${{ inputs.version || 'master' }} || {
+            echo "checkout.py failed, using direct Git commands instead"
+            
+            # Determine target ref
+            TARGET="${{ inputs.version || 'master' }}"
+            echo "Using target: $TARGET"
+            
+            # Checkout master for all submodules or specific tags
+            for SUBMODULE in jellyfin-server jellyfin-web jellyfin-requests jellyfin-server-windows; do
+              echo "Processing submodule $SUBMODULE"
+              cd $SUBMODULE
+              
+              # Fetch all refs
+              git fetch --all
+              
+              if [ "$TARGET" = "master" ]; then
+                git checkout origin/master || git checkout master
+              else
+                # Try tag first, fall back to master
+                git checkout "refs/tags/$TARGET" || git checkout origin/master || git checkout master
+              fi
+              
+              cd ..
+            done
+          }
           
       - name: List directory contents
         run: |
