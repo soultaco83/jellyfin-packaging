@@ -1,4 +1,4 @@
-name: "DEV Build and Push to DockerHub"
+name: "Dev Build and Push to DockerHub"
 
 on:
   schedule:
@@ -12,10 +12,10 @@ on:
         description: 'The server and web stable release tag ("vX.Y.Z") or "master"'
 
 permissions:
-  contents: write  # Changed from 'read' to 'write' to allow pushing to repo
+  contents: write
 
 jobs:
-  Docker:
+  UpdateAndBuild:
     runs-on: ubuntu-24.04
     steps:
       - name: "Set version and release type"
@@ -37,76 +37,83 @@ jobs:
           echo "Set JELLYFIN_VERSION: ${{ env.JELLYFIN_VERSION }}"
           echo "Set JELLYFIN_RELEASE_TYPE: ${{ env.JELLYFIN_RELEASE_TYPE }}"
           echo "Set BUILD_DATE: ${{ env.BUILD_DATE }}"
-
+          
       - name: "Install dependencies"
         run: |
           sudo apt-get update
           sudo apt-get install --yes python3-git python3-yaml
 
       - name: "Checkout repository"
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4
         with:
-          submodules: false  # Don't fetch submodules automatically
           token: ${{ secrets.GITHUB_TOKEN }}
-
+          fetch-depth: 0
+          
       - name: "Configure Git"
         run: |
-          git config --global user.name "GitHub Actions"
+          git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
-
-      - name: "List existing submodules"
-        run: |
-          echo "Current submodule status:"
-          git submodule status
-          echo "Submodule entries in .gitmodules:"
-          cat .gitmodules || echo ".gitmodules file not found"
-
-      - name: "Remove existing submodule folders"
-        run: |
-          # Remove the physical directories for submodules
-          echo "Removing existing submodule directories..."
-          rm -rf jellyfin-server jellyfin-web jellyfin-requests jellyfin-server-windows
           
-          # Remove submodule entries from the index
-          echo "Removing submodule entries from Git index..."
-          git rm --cached jellyfin-server || true
-          git rm --cached jellyfin-web || true
-          git rm --cached jellyfin-requests || true
-          git rm --cached jellyfin-server-windows || true
-          
-          echo "Directory contents after removal:"
-          ls -la
-
-      - name: "Reinitialize submodules"
+      - name: "Remove existing submodules"
         run: |
-          # Reinitialize submodules
-          echo "Reinitializing submodules..."
+          # Remove .gitmodules file
+          if [ -f .gitmodules ]; then
+            rm .gitmodules
+            echo "Removed .gitmodules file"
+          fi
+          
+          # Remove existing submodule folders
+          for dir in jellyfin-server jellyfin-web jellyfin-server-windows jellyfin-requests; do
+            if [ -d "$dir" ]; then
+              rm -rf "$dir"
+              echo "Removed $dir directory"
+            fi
+          done
+          
+          # Remove git references to submodules
+          git rm -rf --cached jellyfin-server jellyfin-web jellyfin-server-windows jellyfin-requests || true
+          
+      - name: "Create new .gitmodules file"
+        run: |
+          cat > .gitmodules << 'EOF'
+          [submodule "jellyfin-server"]
+            path = jellyfin-server
+            url = https://github.com/soultaco83/jellyfin-server.git
+          [submodule "jellyfin-web"]
+            path = jellyfin-web
+            url = https://github.com/soultaco83/jellyfin-web-requeststab.git
+          [submodule "jellyfin-server-windows"]
+            path = jellyfin-server-windows
+            url = https://github.com/jellyfin/jellyfin-server-windows.git
+          [submodule "jellyfin-requests"]
+            path = jellyfin-requests
+            url = https://github.com/soultaco83/Jellyfin_requests_plugin.git
+          EOF
+          
+          git add .gitmodules
+          
+      - name: "Initialize and update submodules"
+        run: |
           git submodule update --init
           
-          # Run checkout.py
-          echo "Running checkout.py..."
+      - name: "Run checkout.py script"
+        run: |
+          chmod +x checkout.py
           ./checkout.py ${{ inputs.version || 'master' }}
           
-          echo "Submodule status after initialization:"
-          git submodule status
-          
-          echo "Directory contents after initialization:"
-          ls -la
-
-      - name: "Commit and push updated submodules"
+      - name: "Commit and push changes"
         run: |
-          # Stage changes
           git add .
+          git commit -m "Update submodules to ${{ env.JELLYFIN_VERSION }}" || echo "No changes to commit"
+          git push
           
-          # Create commit
-          git commit -m "Update submodules to latest versions" || echo "No changes to commit"
-          
-          # Push changes to the repository
-          echo "Pushing changes to repository..."
-          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/soultaco83/jellyfin-packaging.git HEAD:${GITHUB_REF#refs/heads/}
-
       - name: Set permissions for docker-entrypoint.sh
-        run: chmod +x docker/docker-entrypoint.sh
+        run: |
+          if [ -f docker/docker-entrypoint.sh ]; then
+            chmod +x docker/docker-entrypoint.sh
+          else
+            echo "docker-entrypoint.sh not found"
+          fi
 
       - name: "Run builder for Docker containers"
         id: build
@@ -118,51 +125,8 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
           sudo --preserve-env ./build.py ${{ env.JELLYFIN_VERSION }} docker amd64 --local
-
+          
       - name: Log in to Docker Hub
         id: login
         continue-on-error: true
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: "Debug: List Docker images"
-        run: docker images
-
-      - name: Push to Docker Hub
-        id: push
-        continue-on-error: true
-        run: |
-          SOURCE_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ env.JELLYFIN_VERSION }}-amd64" | head -n 1)
-          
-          if [ -z "$SOURCE_IMAGE" ]; then
-            echo "Error: Could not find the source image"
-            docker images
-            exit 1
-          fi
-          
-          echo "Found source image: ${SOURCE_IMAGE}"
-          
-          # Tag and push dev and date-dev
-          echo "Tagging and pushing images..."
-          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:dev"
-          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev"
-          docker push "soultaco83/jellyfin_with_request:dev"
-          docker push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev"
-
-      - name: Wait for image availability
-        run: |
-          sleep 30
-
-      - name: Send Discord notification on failure
-        if: failure()
-        uses: Ilshidur/action-discord@master
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: |
-            ❌ Docker build or push failed for DEV!
-            Version: ${{ env.JELLYFIN_VERSION }}
-            Type: ${{ env.JELLYFIN_RELEASE_TYPE }}
-            Please check the GitHub Actions logs for more details.
+        uses:
