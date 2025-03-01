@@ -48,100 +48,29 @@ jobs:
 
       - name: "Clean and initialize submodules"
         run: |
-          # Find all submodule directories and remove them
-          if [ -f .gitmodules ]; then
-            echo "Cleaning existing submodules..."
-            git config -f .gitmodules --get-regexp '^submodule\..*\.path
-
-      - name: "Prepare repository"
-        id: prep
-        continue-on-error: true
-        run: |-
-          ./checkout.py ${{ inputs.version || 'master' }}
+          # Explicit removal of known submodule directories
+          echo "Removing specific submodule directories..."
+          rm -rf jellyfin-requests
+          rm -rf jellyfin-server
+          rm -rf jellyfin-server-windows
+          rm -rf jellyfin-web
           
-      - name: List directory contents
-        run: |
-          echo "Current working directory:"
-          pwd
-          echo "Contents of current directory:"
+          # List directories after removal
+          echo "Directory contents after removal:"
           ls -la
-          echo "Contents of docker directory (if exists):"
-          ls -la docker/ || echo "docker directory not found"
-
-      - name: Set permissions for docker-entrypoint.sh
-        run: chmod +x docker/docker-entrypoint.sh
-
-      - name: "Run builder for Docker containers"
-        id: build
-        continue-on-error: true
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-        run: |
-          sudo --preserve-env ./build.py ${{ env.JELLYFIN_VERSION }} docker amd64 --local
-
-      - name: Log in to Docker Hub
-        id: login
-        continue-on-error: true
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: "Debug: List Docker images"
-        run: docker images
-
-      - name: Push to Docker Hub
-        id: push
-        continue-on-error: true
-        run: |
-          SOURCE_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ env.JELLYFIN_VERSION }}-amd64" | head -n 1)
           
-          if [ -z "$SOURCE_IMAGE" ]; then
-            echo "Error: Could not find the source image"
-            docker images
-            exit 1
-          fi
+          # Forcefully reset the submodule configuration
+          echo "Resetting submodule configuration..."
+          git submodule deinit --force --all
           
-          echo "Found source image: ${SOURCE_IMAGE}"
+          # Re-initialize and update submodules
+          echo "Re-initializing submodules..."
+          git submodule init
+          git submodule update --recursive --remote
           
-          # Tag and push dev and date-dev
-          echo "Tagging and pushing images..."
-          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:dev"
-          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev"
-          docker push "soultaco83/jellyfin_with_request:dev"
-          docker push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev"
-
-      - name: Wait for image availability
-        run: |
-          sleep 30
-
-      - name: Send Discord notification on failure
-        if: failure()
-        uses: Ilshidur/action-discord@master
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: |
-            ❌ Docker build or push failed for DEV!
-            Version: ${{ env.JELLYFIN_VERSION }}
-            Type: ${{ env.JELLYFIN_RELEASE_TYPE }}
-            Please check the GitHub Actions logs for more details. | 
-            while read path_key path; do
-              echo "Removing submodule at $path"
-              rm -rf "$path"
-            done
-          fi
-          
-          # First run a fetch without any arguments
-          echo "Fetching updates..."
-          git fetch
-
-          # Then initialize and update submodules
-          echo "Initializing submodules..."
-          git submodule update --init
+          # List updated submodules
+          echo "Submodule status after update:"
+          git submodule status
 
       - name: "Prepare repository"
         id: prep
