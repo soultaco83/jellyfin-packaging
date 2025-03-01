@@ -12,7 +12,7 @@ on:
         description: 'The server and web stable release tag ("vX.Y.Z") or "master"'
 
 permissions:
-  contents: read
+  contents: write  # Changed from 'read' to 'write' to allow pushing to repo
 
 jobs:
   Docker:
@@ -47,60 +47,63 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           submodules: false  # Don't fetch submodules automatically
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Clean and initialize submodules"
+      - name: "Configure Git"
         run: |
-          # Forcefully reset the submodule configuration without removing directories
-          echo "Resetting submodule configuration..."
-          git submodule deinit --force --all
-          
-          # Force full re-clone of submodules rather than using existing directories
-          echo "Re-cloning submodules from scratch..."
-          git submodule update --init --recursive --force
-          
-          # List updated submodules
-          echo "Submodule status after update:"
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: "List existing submodules"
+        run: |
+          echo "Current submodule status:"
           git submodule status
+          echo "Submodule entries in .gitmodules:"
+          cat .gitmodules || echo ".gitmodules file not found"
 
-      - name: "Prepare repository"
-        id: prep
-        continue-on-error: true
-        run: |-
-          # If checkout.py fails, we'll handle it with a more direct approach
-          ./checkout.py ${{ inputs.version || 'master' }} || {
-            echo "checkout.py failed, using direct Git commands instead"
-            
-            # Determine target ref
-            TARGET="${{ inputs.version || 'master' }}"
-            echo "Using target: $TARGET"
-            
-            # Checkout master for all submodules or specific tags
-            for SUBMODULE in jellyfin-server jellyfin-web jellyfin-requests jellyfin-server-windows; do
-              echo "Processing submodule $SUBMODULE"
-              cd $SUBMODULE
-              
-              # Fetch all refs
-              git fetch --all
-              
-              if [ "$TARGET" = "master" ]; then
-                git checkout origin/master || git checkout master
-              else
-                # Try tag first, fall back to master
-                git checkout "refs/tags/$TARGET" || git checkout origin/master || git checkout master
-              fi
-              
-              cd ..
-            done
-          }
-          
-      - name: List directory contents
+      - name: "Remove existing submodule folders"
         run: |
-          echo "Current working directory:"
-          pwd
-          echo "Contents of current directory:"
+          # Remove the physical directories for submodules
+          echo "Removing existing submodule directories..."
+          rm -rf jellyfin-server jellyfin-web jellyfin-requests jellyfin-server-windows
+          
+          # Remove submodule entries from the index
+          echo "Removing submodule entries from Git index..."
+          git rm --cached jellyfin-server || true
+          git rm --cached jellyfin-web || true
+          git rm --cached jellyfin-requests || true
+          git rm --cached jellyfin-server-windows || true
+          
+          echo "Directory contents after removal:"
           ls -la
-          echo "Contents of docker directory (if exists):"
-          ls -la docker/ || echo "docker directory not found"
+
+      - name: "Reinitialize submodules"
+        run: |
+          # Reinitialize submodules
+          echo "Reinitializing submodules..."
+          git submodule update --init
+          
+          # Run checkout.py
+          echo "Running checkout.py..."
+          ./checkout.py ${{ inputs.version || 'master' }}
+          
+          echo "Submodule status after initialization:"
+          git submodule status
+          
+          echo "Directory contents after initialization:"
+          ls -la
+
+      - name: "Commit and push updated submodules"
+        run: |
+          # Stage changes
+          git add .
+          
+          # Create commit
+          git commit -m "Update submodules to latest versions" || echo "No changes to commit"
+          
+          # Push changes to the repository
+          echo "Pushing changes to repository..."
+          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/soultaco83/jellyfin-packaging.git HEAD:${GITHUB_REF#refs/heads/}
 
       - name: Set permissions for docker-entrypoint.sh
         run: chmod +x docker/docker-entrypoint.sh
