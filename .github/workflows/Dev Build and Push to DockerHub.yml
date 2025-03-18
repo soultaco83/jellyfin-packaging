@@ -97,14 +97,10 @@ jobs:
 
       - name: "Run builder for Docker containers"
         id: build
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
-          sudo --preserve-env ./build.py ${{ env.JELLYFIN_VERSION }} docker amd64 --local
-          
+          git submodule foreach --recursive git checkout .
+          sudo --preserve-env ./build.py ${{ env.JELLYFIN_VERSION }} docker amd64 --local --verbose
+  
       - name: "Debug: List Docker images"
         run: docker images
         
