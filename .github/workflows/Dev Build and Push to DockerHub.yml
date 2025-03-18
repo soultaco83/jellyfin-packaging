@@ -133,29 +133,15 @@ jobs:
           docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev"
           docker push "soultaco83/jellyfin_with_request:dev"
           docker push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev"
-          
-      - name: Send Discord notification on success
-        uses: Ilshidur/action-discord@master
-        if: success()
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: |
-            ✅ Successfully updated submodules and built Docker image!
-            Version: ${{ env.JELLYFIN_VERSION }}
-            Type: ${{ env.JELLYFIN_RELEASE_TYPE }}
-            Image tags: 
-            - soultaco83/jellyfin_with_request:dev
-            - soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-dev
-            
-      - name: Send Discord notification on failure
-        if: failure()
-        uses: Ilshidur/action-discord@master
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: |
-            ❌ Docker build or push failed!
-            Version: ${{ env.JELLYFIN_VERSION }}
-            Type: ${{ env.JELLYFIN_RELEASE_TYPE }}
-            Please check the GitHub Actions logs for more details.
+        
+#      - name: Send Discord notification on failure
+  #      if: failure()
+ #       uses: Ilshidur/action-discord@master
+  #      env:
+    #      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+#        with:
+    #      args: |
+     #       ❌ Docker build or push failed!
+        #    Version: ${{ env.JELLYFIN_VERSION }}
+    #        Type: ${{ env.JELLYFIN_RELEASE_TYPE }}
+    #        Please check the GitHub Actions logs for more details.
