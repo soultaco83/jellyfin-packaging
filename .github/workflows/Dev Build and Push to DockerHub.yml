@@ -1,6 +1,8 @@
 name: "Update Submodules and Build Docker"
 
 on:
+  schedule:
+    - cron: '0 10 * * *'  # Runs at midnight EST every day
   workflow_dispatch:
     inputs:
       version:
