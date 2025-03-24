@@ -130,4 +130,24 @@ chown root:root "${TARGET_DIR}/Jellyfin.Plugin.RequestsAddon.dll"
 chmod 755 "${TARGET_DIR}/Jellyfin.Plugin.RequestsAddon.dll"
 echo "RequestsAddon plugin installed successfully"
 
+# Create cleanup script
+cat > /usr/local/bin/cleanup-db.sh << 'EOF'
+#!/bin/bash
+sqlite3 /config/data/jellyfin.db "delete from AttachmentStreamInfos"
+echo "$(date) - Cleaned AttachmentStreamInfos table" >> /config/log/db-cleanup.log
+EOF
+
+# Make it executable
+chmod +x /usr/local/bin/cleanup-db.sh
+
+# Set up cron job to run hourly
+echo "0 * * * * /usr/local/bin/cleanup-db.sh" > /etc/cron.d/db-cleanup
+chmod 0644 /etc/cron.d/db-cleanup
+
+# Apply cron job
+crontab /etc/cron.d/db-cleanup
+
+# Start cron service in background
+service cron start
+
 exec "$@"
