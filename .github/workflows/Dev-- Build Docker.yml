@@ -1,4 +1,4 @@
-name: "Update Submodules and Build Docker"
+name: "Dev-- Build Docker"
 
 on:
   schedule:
