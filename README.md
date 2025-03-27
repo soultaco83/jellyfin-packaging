@@ -1,4 +1,4 @@
-DUE TO MASS UPCOMING CHANGES PAUSING WEEKLY RELEASE. MOVING TO DEV UNTIL TESTING IS COMPLETE
+Plugins may not work due to this being based on master branch
 <br/>
 https://forum.jellyfin.org/t-warning-for-unstable-efcore-refactoring-is-coming
 <h1 align="center">Jellyfin Packaging</h1>
