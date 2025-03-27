@@ -1,8 +1,8 @@
-name: "Release Build and Push to DockerHub"
+name: "Update Submodules and Build Docker"
 
 on:
   schedule:
-    - cron: '0 3 * * 6'
+    - cron: '0 11 * * 6'  # Runs at midnight EST every day
   workflow_dispatch:
     inputs:
       version:
@@ -12,12 +12,58 @@ on:
         description: 'The server and web stable release tag ("vX.Y.Z") or "master"'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  Docker:
+  update-submodules:
     runs-on: ubuntu-24.04
     steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          submodules: false
+
+      - name: "Remove existing submodule folders"
+        run: |
+          rm -rf jellyfin-server
+          rm -rf jellyfin-web
+          rm -rf jellyfin-server-windows
+          rm -rf jellyfin-requests
+          
+      - name: "Install Python dependencies"
+        run: |
+          pip install GitPython PyYAML
+          
+      - name: "Initialize and update submodules"
+        run: |
+          git submodule update --init
+          
+      - name: "Run checkout.py to update submodules"
+        run: |
+          chmod +x checkout.py
+          ./checkout.py master
+          
+      - name: "Commit and push changes"
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add -A
+          git commit -m "Update submodules to latest master" || echo "No changes to commit"
+          git push
+          
+  docker-build:
+    needs: update-submodules
+    runs-on: ubuntu-24.04
+    steps:
+      - name: "Checkout updated repository"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          submodules: true
+          
       - name: "Set version and release type"
         id: version
         run: |
@@ -33,53 +79,39 @@ jobs:
             exit 1
           fi
           echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
-          echo "Input version: $INPUT_VERSION"
-          echo "Set JELLYFIN_VERSION: ${{ env.JELLYFIN_VERSION }}"
-          echo "Set JELLYFIN_RELEASE_TYPE: ${{ env.JELLYFIN_RELEASE_TYPE }}"
-          echo "Set BUILD_DATE: ${{ env.BUILD_DATE }}"
+          
       - name: "Install dependencies"
         run: |
           sudo apt-get update
-          sudo apt-get install --yes python3-git python3-yaml
-      - name: "Checkout repository"
-        uses: actions/checkout@v3
-        with:
-          submodules: 'recursive'
-
-      - name: "Prepare repository"
+          sudo apt-get install --yes python3-yaml
+          pip install GitPython
+          
+      - name: "Set permissions for docker-entrypoint.sh"
         run: |
-          ./checkout.py ${{ inputs.version || 'master' }}
-      - name: List directory contents
-        run: |
-          echo "Current working directory:"
-          pwd
-          echo "Contents of current directory:"
-          ls -la
-          echo "Contents of docker directory (if exists):"
-          ls -la docker/ || echo "docker directory not found"
-      - name: Set permissions for docker-entrypoint.sh
-        run: chmod +x docker/docker-entrypoint.sh
-
+          if [ -f "docker/docker-entrypoint.sh" ]; then
+            chmod +x docker/docker-entrypoint.sh
+          else
+            echo "docker-entrypoint.sh not found, checking directory structure"
+            find . -name "docker-entrypoint.sh"
+          fi
       - name: "Run builder for Docker containers"
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        id: build
+        continue-on-error: true
         run: |
           sudo --preserve-env ./build.py ${{ env.JELLYFIN_VERSION }} docker amd64 --local
+          
+      - name: "Debug: List Docker images"
+        run: docker images
+        
       - name: Log in to Docker Hub
+        id: login
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: "Debug: List Docker images"
-        run: docker images
-
       - name: Push to Docker Hub
         run: |
-          # Find the actual image name from the build
           SOURCE_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ env.JELLYFIN_VERSION }}-amd64" | head -n 1)
           
           if [ -z "$SOURCE_IMAGE" ]; then
@@ -90,29 +122,10 @@ jobs:
           
           echo "Found source image: ${SOURCE_IMAGE}"
           
-          # Tag and push with latest tag
-          echo "Tagging and pushing latest image..."
-          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:latest-amd64"
-          docker push "soultaco83/jellyfin_with_request:latest-amd64"
+          # Tag and push latest and date-latest
+          echo "Tagging and pushing images..."
+          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:latest"
+          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-latest"
+          docker push "soultaco83/jellyfin_with_request:latest"
+          docker push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-latest"
           
-          # Tag and push with date tag
-          echo "Tagging and pushing date image..."
-          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-amd64"
-          docker push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-amd64"
-      - name: Wait for image availability
-        run: |
-          # Add a small delay to ensure images are available
-          sleep 30
-      - name: Create and Push Multi-Arch Manifests
-        run: |
-          # Create and push latest manifest
-          echo "Creating latest multi-arch manifest..."
-          docker manifest create "soultaco83/jellyfin_with_request:latest" \
-            "soultaco83/jellyfin_with_request:latest-amd64"
-          docker manifest push "soultaco83/jellyfin_with_request:latest"
-          
-          # Create and push date-based manifest
-          echo "Creating date multi-arch manifest..."
-          docker manifest create "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}" \
-            "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-amd64"
-          docker manifest push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}"
