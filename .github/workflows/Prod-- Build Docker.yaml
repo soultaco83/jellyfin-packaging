@@ -2,7 +2,7 @@ name: "Prod-- Build Docker"
 
 on:
   schedule:
-    - cron: '0 11 * * 0'  # Runs at midnight EST every day
+    - cron: '0 12 1-7 * 0'  # first sunday of every month at 7am
   workflow_dispatch:
     inputs:
       version:
