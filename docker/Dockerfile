@@ -149,6 +149,7 @@ RUN apt-get update \
     ca-certificates \
     gnupg \
     curl \
+    intel-gpu-tools \
     apt-transport-https \
 	zip \
     cron \
