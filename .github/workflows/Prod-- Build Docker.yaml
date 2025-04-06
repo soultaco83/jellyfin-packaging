@@ -15,7 +15,46 @@ permissions:
   contents: write
 
 jobs:
+  update-submodules:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          submodules: false
+
+      - name: "Remove existing submodule folders"
+        run: |
+          rm -rf jellyfin-server
+          rm -rf jellyfin-web
+          rm -rf jellyfin-server-windows
+          rm -rf jellyfin-requests
+          
+      - name: "Install Python dependencies"
+        run: |
+          pip install GitPython PyYAML
+          
+      - name: "Initialize and update submodules"
+        run: |
+          git submodule update --init
+          
+      - name: "Run checkout.py to update submodules"
+        run: |
+          chmod +x checkout.py
+          ./checkout.py master
+          
+      - name: "Commit and push changes"
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add -A
+          git commit -m "Update submodules to latest master" || echo "No changes to commit"
+          git push
+          
   docker-build:
+    needs: update-submodules
     runs-on: ubuntu-24.04
     steps:
       - name: "Checkout updated repository"
