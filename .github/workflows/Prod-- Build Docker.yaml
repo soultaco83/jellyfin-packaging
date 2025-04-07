@@ -16,7 +16,6 @@ permissions:
 
 jobs:      
   docker-build:
-    needs: update-submodules
     runs-on: ubuntu-24.04
     steps:
       - name: "Checkout updated repository"
