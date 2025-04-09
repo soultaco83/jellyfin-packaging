@@ -52,18 +52,17 @@ if target_release != "master":
         target_release = "master"
 
 for submodule in submodules.keys():
-    if target_release == "master":
+    if target_release == "master" or submodule == 'jellyfin-server-windows':
         target_head = "origin/master"
     else:
-        if submodule in ["jellyfin-requests"]:
-            target_head = "origin/master"
-        else:
-            target_head = f"refs/tags/{target_release}"
+        target_head = f"refs/tags/{target_release}"
     # Checkout the given head and reset the working tree
     submodules[submodule].head.reference = target_head
     submodules[submodule].head.reset(index=True, working_tree=True)
     sha = submodules[submodule].head.object.hexsha
+    author = submodules[submodule].head.object.author.name
+    summary = submodules[submodule].head.object.summary
     date = datetime.fromtimestamp(submodules[submodule].head.object.committed_date)
-    print(f"Submodule {submodule} now at commit {sha} ({date})")
+    print(f"Submodule {submodule} now at {target_head} (\"{summary}\" commit {sha} by {author} @ {date})")
 
 print(f"Successfully checked out submodules to ref {target_release}")

@@ -144,7 +144,7 @@ jobs:
             fi
             # Only keep ${NKEEP} (4) unstables; we have to do this manually since reprepro doesn't have granularity for this at the component level
             if [[ ${COMPONENT} == "unstable" ]]; then
-                NKEEP=4
+                NKEEP=3
                 # Get whatever the oldest version is; since these are dated, a simple numerical sort works
                 LIST="$( sudo reprepro -b /srv/debian -C unstable list ${{ matrix.release }} | awk '{ print $NF }' | sort -rn | uniq )"
                 COUNT=$( wc -l <<<"${LIST}" )
@@ -289,7 +289,7 @@ jobs:
             fi
             # Only keep ${NKEEP} (4) unstables; we have to do this manually since reprepro doesn't have granularity for this at the component level
             if [[ ${COMPONENT} == "unstable" ]]; then
-                NKEEP=4
+                NKEEP=3
                 # Get whatever the oldest version is; since these are dated, a simple numerical sort works
                 LIST="$( sudo reprepro -b /srv/ubuntu -C unstable list ${{ matrix.release }} | awk '{ print $NF }' | sort -rn | uniq )"
                 COUNT=$( wc -l <<<"${LIST}" )
@@ -609,7 +609,7 @@ jobs:
           host: "${{ secrets.REPO_HOST }}"
           username: "${{ secrets.REPO_USER }}"
           key: "${{ secrets.REPO_KEY }}"
-          source: "jellyfin_${{ env.JELLYFIN_VERSION }}_windows-x64.exe"
+          source: "*.exe"
           target: "/srv/incoming/server/${{ env.JELLYFIN_VERSION }}/windows/${{ matrix.arch }}"
 
       - name: "Move artifacts into repository"
@@ -622,7 +622,7 @@ jobs:
           script_stop: true
           script: |
             export BASEDIR="/srv/repository/main/server/windows"
-            sudo mv -t ${BASEDIR}/${{ env.JELLYFIN_RELEASE_TYPE }}/${{ env.JELLYFIN_VERSION }}/${{ matrix.arch }}/ /srv/incoming/server/${{ env.JELLYFIN_VERSION }}/windows/${{ matrix.arch }}/jellyfin_${{ env.JELLYFIN_VERSION }}_windows-x64.exe || exit 1
+            sudo mv -t ${BASEDIR}/${{ env.JELLYFIN_RELEASE_TYPE }}/${{ env.JELLYFIN_VERSION }}/${{ matrix.arch }}/ /srv/incoming/server/${{ env.JELLYFIN_VERSION }}/windows/${{ matrix.arch }}/*.exe
 
   MacOS:
     runs-on: ubuntu-24.04
