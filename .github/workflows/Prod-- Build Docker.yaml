@@ -2,7 +2,7 @@ name: "Prod-- Build Docker"
 
 on:
   schedule:
-    - cron: '0 10 1-7 * 0'  # first sunday of every month at 7am
+    - cron: '0 10 1-7 * 0'  # Run at 10:00 UTC on Sundays between days 1-7
   workflow_dispatch:
     inputs:
       version:
@@ -18,7 +18,22 @@ jobs:
   docker-build:
     runs-on: ubuntu-24.04
     steps:
+      - name: "Check if first Sunday of month"
+        id: check-date
+        run: |
+          # Calculate which Sunday of the month this is
+          SUNDAY_OF_MONTH=$((($(date +%-d)-1)/7+1))
+          echo "SUNDAY_OF_MONTH=$SUNDAY_OF_MONTH" >> $GITHUB_ENV
+          # Only proceed if this is the first Sunday (SUNDAY_OF_MONTH=1)
+          if [ "$SUNDAY_OF_MONTH" -eq 1 ]; then
+            echo "IS_FIRST_SUNDAY=true" >> $GITHUB_ENV
+          else
+            echo "IS_FIRST_SUNDAY=false" >> $GITHUB_ENV
+            echo "Not the first Sunday of the month. Skipping job."
+          fi
+          
       - name: "Checkout updated repository"
+        if: env.IS_FIRST_SUNDAY == 'true' || github.event_name == 'workflow_dispatch'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
@@ -26,6 +41,7 @@ jobs:
           submodules: true
           
       - name: "Set version and release type"
+        if: env.IS_FIRST_SUNDAY == 'true' || github.event_name == 'workflow_dispatch'
         id: version
         run: |
           INPUT_VERSION="${{ inputs.version || 'master' }}"
@@ -42,12 +58,14 @@ jobs:
           echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
           
       - name: "Install dependencies"
+        if: env.IS_FIRST_SUNDAY == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           sudo apt-get update
           sudo apt-get install --yes python3-yaml
           pip install GitPython
           
       - name: "Set permissions for docker-entrypoint.sh"
+        if: env.IS_FIRST_SUNDAY == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           if [ -f "docker/docker-entrypoint.sh" ]; then
             chmod +x docker/docker-entrypoint.sh
@@ -55,16 +73,20 @@ jobs:
             echo "docker-entrypoint.sh not found, checking directory structure"
             find . -name "docker-entrypoint.sh"
           fi
+          
       - name: "Run builder for Docker containers"
+        if: env.IS_FIRST_SUNDAY == 'true' || github.event_name == 'workflow_dispatch'
         id: build
         continue-on-error: true
         run: |
           sudo --preserve-env ./build.py ${{ env.JELLYFIN_VERSION }} docker amd64 --local
           
       - name: "Debug: List Docker images"
+        if: env.IS_FIRST_SUNDAY == 'true' || github.event_name == 'workflow_dispatch'
         run: docker images
         
       - name: Log in to Docker Hub
+        if: env.IS_FIRST_SUNDAY == 'true' || github.event_name == 'workflow_dispatch'
         id: login
         uses: docker/login-action@v2
         with:
@@ -72,6 +94,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Push to Docker Hub
+        if: env.IS_FIRST_SUNDAY == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           SOURCE_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ env.JELLYFIN_VERSION }}-amd64" | head -n 1)
           
@@ -89,4 +112,3 @@ jobs:
           docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-latest"
           docker push "soultaco83/jellyfin_with_request:latest"
           docker push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-latest"
-          
