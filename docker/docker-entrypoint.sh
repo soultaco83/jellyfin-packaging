@@ -100,21 +100,6 @@ fi
 # Update marker file
 touch "$CONTAINER_MARKER"
 
-echo "Checking for required directories..."
-if [ ! -d "/config/data/attachments" ]; then
-    echo "Creating missing directory: /config/data/attachments"
-    mkdir -p "/config/data/attachments"
-    chown root:root "/config/data/attachments"
-    chmod 755 "/config/data/attachments"
-fi
-
-if [ ! -d "/config/data/subtitles" ]; then
-    echo "Creating missing directory: /config/data/subtitles"
-    mkdir -p "/config/data/subtitles"
-    chown root:root "/config/data/subtitles"
-    chmod 755 "/config/data/subtitles"
-fi
-
 # Get plugin version silently
 PLUGIN_VERSION=$(grep -oP 'PLUGIN_VERSION=\K.*' /etc/environment)
 
