@@ -17,58 +17,76 @@ DB_FILES=(
     "/config/data/library.db-wal"
 )
 
+ionice_cmd="ionice -c 3"
+nice_cmd="nice -n 19"
+
 # Function to perform database backup
 perform_db_backup() {
     local reason="$1"
-    echo "Performing database backup... (Reason: $reason)"
-    
-    # Create backup directory if it doesn't exist
-    mkdir -p "${BACKUP_DIR}"
+    echo "Scheduling database backup in background... (Reason: $reason)"
+    (
+        # Run backup operations in background
+        echo "Starting background database backup at $(date)"
+        
+        # Create backup directory if it doesn't exist
+        mkdir -p "${BACKUP_DIR}"
 
-    # Create a list of existing files to backup
-    FILES_TO_BACKUP=""
-    for db_file in "${DB_FILES[@]}"; do
-        if [ -f "$db_file" ]; then
-            FILES_TO_BACKUP="${FILES_TO_BACKUP} $(basename "$db_file")"
-        fi
-    done
+        # Create a list of existing files to backup
+        FILES_TO_BACKUP=""
+        for db_file in "${DB_FILES[@]}"; do
+            if [ -f "$db_file" ]; then
+                FILES_TO_BACKUP="${FILES_TO_BACKUP} $(basename "$db_file")"
+            fi
+        done
 
-    # Only attempt zip if we found files to backup
-    if [ ! -z "$FILES_TO_BACKUP" ]; then
-        echo "Found database files to backup: $FILES_TO_BACKUP"
-        cd /config/data
-        if zip "${BACKUP_DIR}/jellyfinDB-${BACKUP_TIMESTAMP}.zip" ${FILES_TO_BACKUP}; then
-            echo "Database backup created successfully at ${BACKUP_DIR}/jellyfinDB-${BACKUP_TIMESTAMP}.zip"
-            
-            # Keep only the last 5 database backups
-            find "${BACKUP_DIR}" -name "jellyfinDB-*.zip" -type f -printf '%T@ %p\n' | sort -rn | tail -n +16 | cut -d' ' -f2- | xargs rm -f 2>/dev/null || true
+        # Only attempt zip if we found files to backup
+        if [ ! -z "$FILES_TO_BACKUP" ]; then
+            echo "Found database files to backup: $FILES_TO_BACKUP"
+            cd /config/data
+            if $nice_cmd $ionice_cmd zip "${BACKUP_DIR}/jellyfinDB-${BACKUP_TIMESTAMP}.zip" ${FILES_TO_BACKUP}; then
+                echo "Database backup created successfully at ${BACKUP_DIR}/jellyfinDB-${BACKUP_TIMESTAMP}.zip"
+                
+                # Keep only the last 15 database backups - run with lower priority
+                $nice_cmd $ionice_cmd find "${BACKUP_DIR}" -name "jellyfinDB-*.zip" -type f -printf '%T@ %p\n' | sort -rn | tail -n +16 | cut -d' ' -f2- | xargs rm -f 2>/dev/null || true
+            else
+                echo "Warning: Database backup creation failed, but continuing with container startup"
+            fi
         else
-            echo "Warning: Database backup creation failed, but continuing with container startup"
+            echo "No database files found to backup"
         fi
-    else
-        echo "No database files found to backup"
-    fi
+        
+        echo "Completed background database backup at $(date)"
+    ) > /config/backups/db-backup-log-${BACKUP_TIMESTAMP}.txt 2>&1 &
+    
+    echo "Database backup scheduled in background - continuing with startup"
 }
 
 # Function to perform config backup
 perform_config_backup() {
-    echo "Performing config backup..."
-    
-    # Check if config directory exists and has files
-    if [ -d "/config/config" ] && [ "$(ls -A /config/config)" ]; then
-        echo "Found config files to backup"
-        cd /config
-        if zip -r "${BACKUP_DIR}/configs-${BACKUP_TIMESTAMP}.zip" config/; then
-            echo "Config backup created successfully at ${BACKUP_DIR}/configs-${BACKUP_TIMESTAMP}.zip"
-            
-            # Keep only the last 5 config backups
-            find "${BACKUP_DIR}" -name "configs-*.zip" -type f | sort -r | tail -n +6 | xargs rm -f 2>/dev/null || true
+    echo "Scheduling config backup in background..."
+    (
+        echo "Starting background config backup at $(date)"
+        
+        # Check if config directory exists and has files
+        if [ -d "/config/config" ] && [ "$(ls -A /config/config)" ]; then
+            echo "Found config files to backup"
+            cd /config
+            if $nice_cmd $ionice_cmd zip -r "${BACKUP_DIR}/configs-${BACKUP_TIMESTAMP}.zip" config/; then
+                echo "Config backup created successfully at ${BACKUP_DIR}/configs-${BACKUP_TIMESTAMP}.zip"
+                
+                # Keep only the last 5 config backups - run with lower priority
+                $nice_cmd $ionice_cmd find "${BACKUP_DIR}" -name "configs-*.zip" -type f | sort -r | tail -n +6 | xargs rm -f 2>/dev/null || true
+            else
+                echo "Warning: Config backup creation failed, but continuing with container startup"
+            fi
         else
-            echo "Warning: Config backup creation failed, but continuing with container startup"
+            echo "No config files found to backup"
         fi
-    else
-        echo "No config files found to backup"
-    fi
+        
+        echo "Completed background config backup at $(date)"
+    ) > /config/backups/config-backup-log-${BACKUP_TIMESTAMP}.txt 2>&1 &
+    
+    echo "Config backup scheduled in background - continuing with startup"
 }
 
 # Debug info
