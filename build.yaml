@@ -31,6 +31,8 @@ nuget:
     - MediaBrowser.Model/MediaBrowser.Model.csproj
     - Emby.Naming/Emby.Naming.csproj
     - src/Jellyfin.Extensions/Jellyfin.Extensions.csproj
+    - src/Jellyfin.Database/Jellyfin.Database.Implementations/Jellyfin.Database.Implementations.csproj
+    - src/Jellyfin.MediaEncoding.Keyframes/Jellyfin.MediaEncoding.Keyframes.csproj
   feed_urls:
     stable: https://api.nuget.org/v3/index.json
     unstable: https://nuget.pkg.github.com/jellyfin/index.json
