@@ -147,7 +147,9 @@ chmod 0644 /etc/cron.d/db-cleanup
 # Apply cron job
 crontab /etc/cron.d/db-cleanup
 
-# Start cron service in background
+echo "Starting cron service..."
 service cron start
+echo "Cron service started successfully"
 
+echo "About to execute Jellyfin at $@..."
 exec "$@"
