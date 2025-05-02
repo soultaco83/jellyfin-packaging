@@ -164,10 +164,37 @@ chmod 0644 /etc/cron.d/db-cleanup
 
 # Apply cron job
 crontab /etc/cron.d/db-cleanup
-
-echo "Starting cron service..."
 service cron start
-echo "Cron service started successfully"
 
 echo "About to execute Jellyfin at $@..."
-exec "$@"
+echo "Starting Jellyfin with timeout check (5 minutes)..."
+echo "Jellyfin startup began at $(date)"
+
+# Create a log directory if it doesn't exist
+mkdir -p /config/log
+
+# Run with timeout and log output
+timeout 300s "$@" --log-level=Debug > /config/log/jellyfin-startup.log 2>&1 &
+JELLYFIN_PID=$!
+
+# Wait for Jellyfin to start or timeout
+echo "Waiting for Jellyfin to start (PID: $JELLYFIN_PID)..."
+wait $JELLYFIN_PID
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 124 ]; then
+    echo "ERROR: Jellyfin failed to start within 5 minutes. Check logs at /config/log/jellyfin-startup.log"
+    echo "Last 100 lines of log:"
+    tail -n 100 /config/log/jellyfin-startup.log
+    exit 1
+elif [ $EXIT_CODE -ne 0 ]; then
+    echo "ERROR: Jellyfin exited with code $EXIT_CODE. Check logs at /config/log/jellyfin-startup.log"
+    echo "Last 100 lines of log:"
+    tail -n 100 /config/log/jellyfin-startup.log
+    exit $EXIT_CODE
+else
+    echo "Jellyfin started successfully!"
+fi
+
+# Keep the container running
+tail -f /config/log/jellyfin-startup.log
