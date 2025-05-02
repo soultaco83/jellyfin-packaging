@@ -171,30 +171,59 @@ service cron start
 # Make sure the log directory exists
 mkdir -p /config/log
 
-# Check system state before starting Jellyfin
-echo "============ SYSTEM STATE BEFORE JELLYFIN START ============"
-echo "Directory structure:"
+# Check basic system info
+echo "============ SYSTEM INFO ============"
+echo "Directory listing for /jellyfin:"
 ls -la /jellyfin/
+echo "Directory listing for /config:"
 ls -la /config/
-
-echo "Memory usage:"
-free -h || echo "free command not available"
-
-echo "Disk space:"
-df -h || echo "df command not available"
-
-echo "Process list:"
-ps aux || echo "ps command not available"
-
-echo "Network status:"
-netstat -tulpn || echo "netstat command not available"
-
-echo "Jellyfin executable info:"
-file /jellyfin/jellyfin || echo "file command not available"
-echo "============================================================"
+echo "===================================="
 
 echo "Cron service started successfully"
 echo "About to execute Jellyfin at $@..."
 
-# Execute Jellyfin in the foreground with debug output
-exec "$@"
+# Create a wrapper script to capture Jellyfin output
+cat > /tmp/jellyfin-wrapper.sh << 'EOF'
+#!/bin/bash
+echo "Jellyfin process started with PID $$"
+echo "Start time: $(date)"
+echo "Command line: $@"
+
+# Run Jellyfin with all output captured to log
+"$@" > /config/log/jellyfin-output.log 2>&1 &
+JELLYFIN_PID=$!
+
+# Log the PID
+echo "Jellyfin running with PID: $JELLYFIN_PID"
+
+# Wait 10 seconds to see if it crashes immediately
+sleep 10
+
+# Check if process is still running
+if kill -0 $JELLYFIN_PID 2>/dev/null; then
+    echo "Jellyfin still running after 10 seconds, looks good!"
+    echo "Tailing log file for next 30 seconds..."
+    timeout 30s tail -f /config/log/jellyfin-output.log &
+else
+    echo "ERROR: Jellyfin process died within 10 seconds!"
+    echo "Last 50 lines of log:"
+    tail -n 50 /config/log/jellyfin-output.log
+    exit 1
+fi
+
+# Keep container running by following the Jellyfin process
+echo "Waiting for Jellyfin process to complete..."
+wait $JELLYFIN_PID
+EXIT_CODE=$?
+
+echo "Jellyfin process exited with code: $EXIT_CODE"
+echo "Last 50 lines of log:"
+tail -n 50 /config/log/jellyfin-output.log
+
+exit $EXIT_CODE
+EOF
+
+chmod +x /tmp/jellyfin-wrapper.sh
+
+# Execute the wrapper script
+exec /tmp/jellyfin-wrapper.sh "$@"
