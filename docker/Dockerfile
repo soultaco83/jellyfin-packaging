@@ -229,6 +229,10 @@ RUN apt-get update && \
     dotnet-sdk-8.0 \
     jq \
     procps \
+    net-tools \
+    file \
+    lsof \
+    strace \
     sqlite3	&& \
     rm -rf /var/lib/apt/lists/*
 
