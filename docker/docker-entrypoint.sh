@@ -164,37 +164,37 @@ chmod 0644 /etc/cron.d/db-cleanup
 
 # Apply cron job
 crontab /etc/cron.d/db-cleanup
+
+echo "Starting cron service..."
 service cron start
 
-echo "About to execute Jellyfin at $@..."
-echo "Starting Jellyfin with timeout check (5 minutes)..."
-echo "Jellyfin startup began at $(date)"
-
-# Create a log directory if it doesn't exist
+# Make sure the log directory exists
 mkdir -p /config/log
 
-# Run with timeout and log output
-timeout 300s "$@" --log-level=Debug > /config/log/jellyfin-startup.log 2>&1 &
-JELLYFIN_PID=$!
+# Check system state before starting Jellyfin
+echo "============ SYSTEM STATE BEFORE JELLYFIN START ============"
+echo "Directory structure:"
+ls -la /jellyfin/
+ls -la /config/
 
-# Wait for Jellyfin to start or timeout
-echo "Waiting for Jellyfin to start (PID: $JELLYFIN_PID)..."
-wait $JELLYFIN_PID
-EXIT_CODE=$?
+echo "Memory usage:"
+free -h || echo "free command not available"
 
-if [ $EXIT_CODE -eq 124 ]; then
-    echo "ERROR: Jellyfin failed to start within 5 minutes. Check logs at /config/log/jellyfin-startup.log"
-    echo "Last 100 lines of log:"
-    tail -n 100 /config/log/jellyfin-startup.log
-    exit 1
-elif [ $EXIT_CODE -ne 0 ]; then
-    echo "ERROR: Jellyfin exited with code $EXIT_CODE. Check logs at /config/log/jellyfin-startup.log"
-    echo "Last 100 lines of log:"
-    tail -n 100 /config/log/jellyfin-startup.log
-    exit $EXIT_CODE
-else
-    echo "Jellyfin started successfully!"
-fi
+echo "Disk space:"
+df -h || echo "df command not available"
 
-# Keep the container running
-tail -f /config/log/jellyfin-startup.log
+echo "Process list:"
+ps aux || echo "ps command not available"
+
+echo "Network status:"
+netstat -tulpn || echo "netstat command not available"
+
+echo "Jellyfin executable info:"
+file /jellyfin/jellyfin || echo "file command not available"
+echo "============================================================"
+
+echo "Cron service started successfully"
+echo "About to execute Jellyfin at $@..."
+
+# Execute Jellyfin in the foreground with debug output
+exec "$@"
