@@ -228,6 +228,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     dotnet-sdk-8.0 \
     jq \
+    procps \
     sqlite3	&& \
     rm -rf /var/lib/apt/lists/*
 
