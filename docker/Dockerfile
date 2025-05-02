@@ -290,5 +290,5 @@ VOLUME ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR}
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["/jellyfin/jellyfin"]
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=1 \
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=5 \
      CMD curl --noproxy 'localhost' -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
