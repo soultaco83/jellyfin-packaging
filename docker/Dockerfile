@@ -228,7 +228,6 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     dotnet-sdk-8.0 \
     jq \
-    procps \
     net-tools \
     file \
     lsof \
@@ -295,5 +294,5 @@ VOLUME ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR}
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["/jellyfin/jellyfin"]
 
-HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=5 \
+HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
      CMD curl --noproxy 'localhost' -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
