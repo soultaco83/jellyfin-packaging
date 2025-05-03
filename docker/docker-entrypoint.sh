@@ -17,76 +17,58 @@ DB_FILES=(
     "/config/data/library.db-wal"
 )
 
-ionice_cmd="ionice -c 3"
-nice_cmd="nice -n 19"
-
 # Function to perform database backup
 perform_db_backup() {
     local reason="$1"
-    echo "Scheduling database backup in background... (Reason: $reason)"
-    (
-        # Run backup operations in background
-        echo "Starting background database backup at $(date)"
-        
-        # Create backup directory if it doesn't exist
-        mkdir -p "${BACKUP_DIR}"
-
-        # Create a list of existing files to backup
-        FILES_TO_BACKUP=""
-        for db_file in "${DB_FILES[@]}"; do
-            if [ -f "$db_file" ]; then
-                FILES_TO_BACKUP="${FILES_TO_BACKUP} $(basename "$db_file")"
-            fi
-        done
-
-        # Only attempt zip if we found files to backup
-        if [ ! -z "$FILES_TO_BACKUP" ]; then
-            echo "Found database files to backup: $FILES_TO_BACKUP"
-            cd /config/data
-            if $nice_cmd $ionice_cmd zip "${BACKUP_DIR}/jellyfinDB-${BACKUP_TIMESTAMP}.zip" ${FILES_TO_BACKUP}; then
-                echo "Database backup created successfully at ${BACKUP_DIR}/jellyfinDB-${BACKUP_TIMESTAMP}.zip"
-                
-                # Keep only the last 15 database backups - run with lower priority
-                $nice_cmd $ionice_cmd find "${BACKUP_DIR}" -name "jellyfinDB-*.zip" -type f -printf '%T@ %p\n' | sort -rn | tail -n +16 | cut -d' ' -f2- | xargs rm -f 2>/dev/null || true
-            else
-                echo "Warning: Database backup creation failed, but continuing with container startup"
-            fi
-        else
-            echo "No database files found to backup"
-        fi
-        
-        echo "Completed background database backup at $(date)"
-    ) > /config/backups/db-backup-log-${BACKUP_TIMESTAMP}.txt 2>&1 &
+    echo "Performing database backup... (Reason: $reason)"
     
-    echo "Database backup scheduled in background - continuing with startup"
+    # Create backup directory if it doesn't exist
+    mkdir -p "${BACKUP_DIR}"
+
+    # Create a list of existing files to backup
+    FILES_TO_BACKUP=""
+    for db_file in "${DB_FILES[@]}"; do
+        if [ -f "$db_file" ]; then
+            FILES_TO_BACKUP="${FILES_TO_BACKUP} $(basename "$db_file")"
+        fi
+    done
+
+    # Only attempt zip if we found files to backup
+    if [ ! -z "$FILES_TO_BACKUP" ]; then
+        echo "Found database files to backup: $FILES_TO_BACKUP"
+        cd /config/data
+        if zip "${BACKUP_DIR}/jellyfinDB-${BACKUP_TIMESTAMP}.zip" ${FILES_TO_BACKUP}; then
+            echo "Database backup created successfully at ${BACKUP_DIR}/jellyfinDB-${BACKUP_TIMESTAMP}.zip"
+            
+            # Keep only the last 5 database backups
+            find "${BACKUP_DIR}" -name "jellyfinDB-*.zip" -type f -printf '%T@ %p\n' | sort -rn | tail -n +16 | cut -d' ' -f2- | xargs rm -f 2>/dev/null || true
+        else
+            echo "Warning: Database backup creation failed, but continuing with container startup"
+        fi
+    else
+        echo "No database files found to backup"
+    fi
 }
 
 # Function to perform config backup
 perform_config_backup() {
-    echo "Scheduling config backup in background..."
-    (
-        echo "Starting background config backup at $(date)"
-        
-        # Check if config directory exists and has files
-        if [ -d "/config/config" ] && [ "$(ls -A /config/config)" ]; then
-            echo "Found config files to backup"
-            cd /config
-            if $nice_cmd $ionice_cmd zip -r "${BACKUP_DIR}/configs-${BACKUP_TIMESTAMP}.zip" config/; then
-                echo "Config backup created successfully at ${BACKUP_DIR}/configs-${BACKUP_TIMESTAMP}.zip"
-                
-                # Keep only the last 5 config backups - run with lower priority
-                $nice_cmd $ionice_cmd find "${BACKUP_DIR}" -name "configs-*.zip" -type f | sort -r | tail -n +6 | xargs rm -f 2>/dev/null || true
-            else
-                echo "Warning: Config backup creation failed, but continuing with container startup"
-            fi
-        else
-            echo "No config files found to backup"
-        fi
-        
-        echo "Completed background config backup at $(date)"
-    ) > /config/backups/config-backup-log-${BACKUP_TIMESTAMP}.txt 2>&1 &
+    echo "Performing config backup..."
     
-    echo "Config backup scheduled in background - continuing with startup"
+    # Check if config directory exists and has files
+    if [ -d "/config/config" ] && [ "$(ls -A /config/config)" ]; then
+        echo "Found config files to backup"
+        cd /config
+        if zip -r "${BACKUP_DIR}/configs-${BACKUP_TIMESTAMP}.zip" config/; then
+            echo "Config backup created successfully at ${BACKUP_DIR}/configs-${BACKUP_TIMESTAMP}.zip"
+            
+            # Keep only the last 5 config backups
+            find "${BACKUP_DIR}" -name "configs-*.zip" -type f | sort -r | tail -n +6 | xargs rm -f 2>/dev/null || true
+        else
+            echo "Warning: Config backup creation failed, but continuing with container startup"
+        fi
+    else
+        echo "No config files found to backup"
+    fi
 }
 
 # Debug info
@@ -167,63 +149,8 @@ crontab /etc/cron.d/db-cleanup
 
 echo "Starting cron service..."
 service cron start
-
-# Make sure the log directory exists
-mkdir -p /config/log
-
-# Check basic system info
-echo "============ SYSTEM INFO ============"
-echo "Directory listing for /jellyfin:"
-ls -la /jellyfin/
-echo "Directory listing for /config:"
-ls -la /config/
-echo "===================================="
-
 echo "Cron service started successfully"
-echo "About to execute Jellyfin at $@..."
 
-# Create a wrapper script to capture Jellyfin output
-cat > /tmp/jellyfin-wrapper.sh << 'EOF'
-#!/bin/bash
-echo "Jellyfin process started with PID $$"
-echo "Start time: $(date)"
-echo "Command line: $@"
-
-# Run Jellyfin with all output captured to log
-"$@" > /config/log/jellyfin-output.log 2>&1 &
-JELLYFIN_PID=$!
-
-# Log the PID
-echo "Jellyfin running with PID: $JELLYFIN_PID"
-
-# Wait 10 seconds to see if it crashes immediately
-sleep 10
-
-# Check if process is still running
-if kill -0 $JELLYFIN_PID 2>/dev/null; then
-    echo "Jellyfin still running after 10 seconds, looks good!"
-    echo "Tailing log file for next 30 seconds..."
-    timeout 30s tail -f /config/log/jellyfin-output.log &
-else
-    echo "ERROR: Jellyfin process died within 10 seconds!"
-    echo "Last 50 lines of log:"
-    tail -n 50 /config/log/jellyfin-output.log
-    exit 1
-fi
-
-# Keep container running by following the Jellyfin process
-echo "Waiting for Jellyfin process to complete..."
-wait $JELLYFIN_PID
-EXIT_CODE=$?
-
-echo "Jellyfin process exited with code: $EXIT_CODE"
-echo "Last 50 lines of log:"
-tail -n 50 /config/log/jellyfin-output.log
-
-exit $EXIT_CODE
-EOF
-
-chmod +x /tmp/jellyfin-wrapper.sh
-
-# Execute the wrapper script
-exec /tmp/jellyfin-wrapper.sh "$@"
+echo "Starting Jellyfin at $@..."
+chmod 777 -R /jellyfin
+exec "$@"
