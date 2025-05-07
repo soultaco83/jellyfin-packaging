@@ -137,6 +137,10 @@ sqlite3 /config/data/jellyfin.db "delete from AttachmentStreamInfos"
 echo "$(date) - Cleaned AttachmentStreamInfos table" >> /config/log/db-cleanup.log
 EOF
 
+if [ ! -f /jellyfin/jellyfin-web/manifest.json ]; then
+    cp /jellyfin/jellyfin-web/manifest.*.json /jellyfin/jellyfin-web/manifest.json
+fi
+
 # Make it executable
 chmod +x /usr/local/bin/cleanup-db.sh
 
@@ -146,10 +150,7 @@ chmod 0644 /etc/cron.d/db-cleanup
 
 # Apply cron job
 crontab /etc/cron.d/db-cleanup
-
-echo "Starting cron service..."
 service cron start
-echo "Cron service started successfully"
 
 echo "Starting Jellyfin at $@..."
 chmod 777 -R /jellyfin
