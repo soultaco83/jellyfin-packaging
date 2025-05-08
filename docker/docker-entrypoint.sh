@@ -130,16 +130,12 @@ chown root:root "${TARGET_DIR}/Jellyfin.Plugin.RequestsAddon.dll"
 chmod 755 "${TARGET_DIR}/Jellyfin.Plugin.RequestsAddon.dll"
 echo "RequestsAddon plugin installed successfully"
 
-# Create cleanup script
+# Create cleanup script(fix for subtitles not playing)
 cat > /usr/local/bin/cleanup-db.sh << 'EOF'
 #!/bin/bash
 sqlite3 /config/data/jellyfin.db "delete from AttachmentStreamInfos"
 echo "$(date) - Cleaned AttachmentStreamInfos table" >> /config/log/db-cleanup.log
 EOF
-
-if [ ! -f /jellyfin/jellyfin-web/manifest.json ]; then
-    cp /jellyfin/jellyfin-web/manifest.*.json /jellyfin/jellyfin-web/manifest.json
-fi
 
 # Make it executable
 chmod +x /usr/local/bin/cleanup-db.sh
@@ -152,6 +148,15 @@ chmod 0644 /etc/cron.d/db-cleanup
 crontab /etc/cron.d/db-cleanup &> /dev/null
 service cron start &> /dev/null
 
+# Temp fix for webos
+if [ ! -f /jellyfin/jellyfin-web/manifest.json ]; then
+    cp /jellyfin/jellyfin-web/manifest.*.json /jellyfin/jellyfin-web/manifest.json
+fi
+
+# Temp fix for tmp folder requirement
+mkdir -p /tmp/jellyfin
+
+# Starts jellyfin
 echo "Starting Jellyfin at $@..."
 chmod 777 -R /jellyfin
 exec "$@"
