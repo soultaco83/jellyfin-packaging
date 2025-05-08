@@ -141,15 +141,6 @@ if [ ! -f /jellyfin/jellyfin-web/manifest.json ]; then
     cp /jellyfin/jellyfin-web/manifest.*.json /jellyfin/jellyfin-web/manifest.json
 fi
 
-echo "Performing database vacuum before startup..."
-sqlite3 /config/data/jellyfin.db "VACUUM"
-echo "$(date) - Performed startup VACUUM on jellyfin.db" >> /config/log/db-vacuum.log
-
-if [ -f "/config/data/library.db" ]; then
-  sqlite3 /config/data/library.db "VACUUM"
-  echo "$(date) - Performed startup VACUUM on library.db" >> /config/log/db-vacuum.log
-fi
-
 # Make it executable
 chmod +x /usr/local/bin/cleanup-db.sh
 
