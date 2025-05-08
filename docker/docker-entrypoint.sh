@@ -141,6 +141,15 @@ if [ ! -f /jellyfin/jellyfin-web/manifest.json ]; then
     cp /jellyfin/jellyfin-web/manifest.*.json /jellyfin/jellyfin-web/manifest.json
 fi
 
+echo "Performing database vacuum before startup..."
+sqlite3 /config/data/jellyfin.db "VACUUM"
+echo "$(date) - Performed startup VACUUM on jellyfin.db" >> /config/log/db-vacuum.log
+
+if [ -f "/config/data/library.db" ]; then
+  sqlite3 /config/data/library.db "VACUUM"
+  echo "$(date) - Performed startup VACUUM on library.db" >> /config/log/db-vacuum.log
+fi
+
 # Make it executable
 chmod +x /usr/local/bin/cleanup-db.sh
 
@@ -149,8 +158,8 @@ echo "0 * * * * /usr/local/bin/cleanup-db.sh" > /etc/cron.d/db-cleanup
 chmod 0644 /etc/cron.d/db-cleanup
 
 # Apply cron job
-crontab /etc/cron.d/db-cleanup
-service cron start
+crontab /etc/cron.d/db-cleanup &> /dev/null
+service cron start &> /dev/null
 
 echo "Starting Jellyfin at $@..."
 chmod 777 -R /jellyfin
