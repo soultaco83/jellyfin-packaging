@@ -1,4 +1,4 @@
-name: "test-- Build Docker"
+name: "Test Branch - Build Docker"
 
 on:
   workflow_dispatch:
@@ -15,6 +15,8 @@ permissions:
 jobs:
   update-submodules:
     runs-on: ubuntu-24.04
+    outputs:
+      build_branch: ${{ env.BUILD_BRANCH }}
     steps:
       - name: "Checkout repository"
         uses: actions/checkout@v4
@@ -22,6 +24,17 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
           submodules: false
+          
+      - name: "Create and switch to test build branch"
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
+          # Create or switch to a dedicated branch for test builds
+          BUILD_BRANCH="test-build-$(date +'%Y%m%d-%H%M%S')"
+          git checkout -b $BUILD_BRANCH
+          echo "BUILD_BRANCH=$BUILD_BRANCH" >> $GITHUB_ENV
+          echo "Created test build branch: $BUILD_BRANCH"
 
       - name: "Remove existing submodule folders"
         run: |
@@ -38,18 +51,71 @@ jobs:
         run: |
           git submodule update --init
           
-      - name: "Run checkout.py to update submodules"
+      - name: "Update jellyfin-server to test branch"
         run: |
-          chmod +x checkout.py
-          ./checkout.py master
+          cd jellyfin-server
+          
+          # Fetch all branches from origin
+          git fetch origin
+          
+          # Check if the test branch exists
+          if git show-ref --verify --quiet refs/remotes/origin/test; then
+            echo "Test branch exists, checking it out..."
+            git checkout -B test origin/test
+            git pull origin test
+            echo "Successfully checked out jellyfin-server test branch"
+            
+            # Show current commit info
+            echo "Current jellyfin-server commit:"
+            git log -1 --oneline
+          else
+            echo "Warning: Test branch not found in jellyfin-server, using master"
+            git checkout -B master origin/master
+            git pull origin master
+            echo "Current jellyfin-server commit (master fallback):"
+            git log -1 --oneline
+          fi
+          
+      - name: "Update other submodules to master"
+        run: |
+          # Update jellyfin-web to master
+          cd jellyfin-web
+          git fetch origin
+          git checkout -B master origin/master
+          git pull origin master
+          echo "Current jellyfin-web commit:"
+          git log -1 --oneline
+          cd ..
+          
+          # Update jellyfin-requests to master
+          cd jellyfin-requests
+          git fetch origin
+          git checkout -B master origin/master
+          git pull origin master
+          echo "Current jellyfin-requests commit:"
+          git log -1 --oneline
+          cd ..
+          
+      - name: "Show submodule status"
+        run: |
+          echo "=== Submodule Status ==="
+          git submodule status
+          echo ""
+          echo "=== Jellyfin-server branch ==="
+          cd jellyfin-server && git branch -v && cd ..
+          echo ""
+          echo "=== Jellyfin-web branch ==="  
+          cd jellyfin-web && git branch -v && cd ..
+          echo ""
+          echo "=== Jellyfin-requests branch ==="
+          cd jellyfin-requests && git branch -v && cd ..
           
       - name: "Commit and push changes"
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
           git add -A
-          git commit -m "Update submodules to latest master" || echo "No changes to commit"
-          git push
+          git commit -m "Update submodules: jellyfin-server -> test, others -> master" || echo "No changes to commit"
+          git push origin $BUILD_BRANCH
+          echo "Pushed changes to branch: $BUILD_BRANCH"
           
   docker-build:
     needs: update-submodules
@@ -58,7 +124,7 @@ jobs:
       - name: "Checkout updated repository"
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ needs.update-submodules.outputs.build_branch }}
           fetch-depth: 0
           submodules: true
           
@@ -66,6 +132,7 @@ jobs:
         id: version
         run: |
           INPUT_VERSION="${{ inputs.version || 'master' }}"
+          
           if [[ "$INPUT_VERSION" == "master" ]]; then
             echo "JELLYFIN_VERSION=$(date +'%Y%m%d%H')" >> $GITHUB_ENV
             echo "JELLYFIN_RELEASE_TYPE=unstable" >> $GITHUB_ENV
@@ -76,12 +143,15 @@ jobs:
             echo "Invalid version input"
             exit 1
           fi
+          
           echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
+          
+          echo "Building test version with jellyfin-server test branch"
           
       - name: "Install dependencies"
         run: |
           sudo apt-get update
-          sudo apt-get install --yes python3-yaml
+          sudo apt-ge install --yes python3-yaml
           pip install GitPython
           
       - name: "Set permissions for docker-entrypoint.sh"
@@ -92,6 +162,20 @@ jobs:
             echo "docker-entrypoint.sh not found, checking directory structure"
             find . -name "docker-entrypoint.sh"
           fi
+          
+      - name: "Show submodule commit info before build"
+        run: |
+          echo "=== Building with these submodule commits ==="
+          echo "Jellyfin-server (test branch):"
+          cd jellyfin-server && git log -1 --pretty=format:"  Branch: %D%n  Commit: %H%n  Author: %an%n  Date: %ad%n  Message: %s%n" && cd ..
+          echo ""
+          echo "Jellyfin-web (master):"
+          cd jellyfin-web && git log -1 --pretty=format:"  Branch: %D%n  Commit: %H%n  Author: %an%n  Date: %ad%n  Message: %s%n" && cd ..
+          echo ""
+          echo "Jellyfin-requests (master):"
+          cd jellyfin-requests && git log -1 --pretty=format:"  Branch: %D%n  Commit: %H%n  Author: %an%n  Date: %ad%n  Message: %s%n" && cd ..
+          echo ""
+          
       - name: "Run builder for Docker containers"
         id: build
         continue-on-error: true
@@ -120,8 +204,9 @@ jobs:
           
           echo "Found source image: ${SOURCE_IMAGE}"
           
-          # Tag and push dev and date-dev
-          echo "Tagging and pushing images..."
+          # Tag and push to test tag
+          echo "Tagging and pushing as: soultaco83/jellyfin_with_request:test"
           docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:test"
           docker push "soultaco83/jellyfin_with_request:test"
           
+          echo "Successfully pushed Docker image to test tag!"
