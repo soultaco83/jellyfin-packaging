@@ -1,6 +1,6 @@
 Plugins may not work due to this being based on master branch
 <br/>
-https://forum.jellyfin.org/t-warning-for-unstable-efcore-refactoring-is-coming
+I suggest adding repo https://repo.jellyfin.org/files/plugin-unstable/manifest.json 
 <h1 align="center">Jellyfin Packaging</h1>
 <h3 align="center">Part of Jellyfin: The Free Software Media System</h3>
 
