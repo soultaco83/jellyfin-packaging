@@ -52,7 +52,7 @@ if target_release != "master":
         target_release = "master"
 
 for submodule in submodules.keys():
-    if target_release == "master" or submodule == 'jellyfin-server-windows':
+    if target_release == "master":
         target_head = "origin/master"
     else:
         target_head = f"refs/tags/{target_release}"
