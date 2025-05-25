@@ -152,7 +152,7 @@ service cron start &> /dev/null
 if [ ! -f /jellyfin/jellyfin-web/manifest.json ]; then
     cp /jellyfin/jellyfin-web/manifest.*.json /jellyfin/jellyfin-web/manifest.json
 fi
-
+touch /jellyfin/jellyfin-web/notification.txt
 # Temp fix for tmp folder requirement
 mkdir -p /tmp/jellyfin
 
