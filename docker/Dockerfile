@@ -129,7 +129,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     LANGUAGE="en_US:en" \
     JELLYFIN_DATA_DIR="/config" \
     JELLYFIN_CACHE_DIR="/config/cache" \
-    JELLYFIN_CONFIG_DIR="/config/config" \
+    JELLYFIN_CONFIG_DIR="/config" \
     JELLYFIN_LOG_DIR="/config/log" \
     JELLYFIN_WEB_DIR="/jellyfin/jellyfin-web" \
     JELLYFIN_FFMPEG="/usr/lib/jellyfin-ffmpeg/ffmpeg" \
@@ -152,9 +152,8 @@ RUN apt-get update \
     ca-certificates \
     gnupg \
     curl \
-    intel-gpu-tools \
     apt-transport-https \
-	zip \
+    zip \
     cron \
  && curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key \
   | gpg --dearmor -o /etc/apt/trusted.gpg.d/debian-jellyfin.gpg \
