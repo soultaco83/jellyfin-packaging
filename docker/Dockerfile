@@ -132,8 +132,9 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     JELLYFIN_CONFIG_DIR="/config/config" \
     JELLYFIN_LOG_DIR="/config/log" \
     JELLYFIN_WEB_DIR="/jellyfin/jellyfin-web" \
-    JELLYFIN_FFMPEG="/usr/lib/jellyfin-ffmpeg/ffmpeg"
-
+    JELLYFIN_FFMPEG="/usr/lib/jellyfin-ffmpeg/ffmpeg" \
+    JELLYFIN_PLUGIN_PATH="/usr/lib/jellyfin/plugins:${JELLYFIN_DATA_DIR}/plugins"
+    
 # required for fontconfig cache
 ENV XDG_CACHE_HOME=${JELLYFIN_CACHE_DIR}
 
@@ -146,11 +147,14 @@ ENV NVIDIA_DRIVER_CAPABILITIES="compute,video,utility"
 
 # Install dependencies:
 RUN apt-get update \
+ && apt-get upgrade -y \
  && apt-get install --no-install-recommends --no-install-suggests --yes \
     ca-certificates \
     gnupg \
     curl \
     apt-transport-https \
+    zip \
+    cron \
  && curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key \
   | gpg --dearmor -o /etc/apt/trusted.gpg.d/debian-jellyfin.gpg \
  && echo "deb [arch=${PACKAGE_ARCH}] https://repo.jellyfin.org/master/debian ${OS_VERSION} main" > /etc/apt/sources.list.d/jellyfin.list \
@@ -227,9 +231,80 @@ RUN mkdir -p ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR} \
 COPY --from=server /server /jellyfin
 COPY --from=web /web /jellyfin/jellyfin-web
 
+RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
+
+# Copy the plugin files from the submodule
+COPY jellyfin-requests /tmp/jellyfin-requests
+
+# Install dependencies for plugin and JSON parsing
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    wget \
+    apt-transport-https \
+    software-properties-common && \
+    wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
+    dpkg -i packages-microsoft-prod.deb && \
+    rm packages-microsoft-prod.deb && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    dotnet-sdk-8.0 \
+    jq \
+    net-tools \
+    file \
+    lsof \
+    strace \
+    sqlite3	&& \
+    rm -rf /var/lib/apt/lists/*
+
+# Extract and set the plugin version (replace the existing block)
+RUN PLUGIN_VERSION=$(jq -r '.[0].versions | sort_by(.timestamp) | reverse | .[0].version' /tmp/jellyfin-requests/manifest.json) && \
+    echo "Latest plugin version: $PLUGIN_VERSION" && \
+    echo "PLUGIN_VERSION=$PLUGIN_VERSION" >> /etc/environment && \
+    echo "Verifying /etc/environment content:" && \
+    cat /etc/environment && \
+    echo "Testing version extraction:" && \
+    grep -oP 'PLUGIN_VERSION=\K.*' /etc/environment
+
+# Build the plugin using the version from environment
+RUN cd /tmp/jellyfin-requests && \
+    PLUGIN_VERSION=$(grep -oP 'PLUGIN_VERSION=\K.*' /etc/environment) && \
+    echo "Building plugin version: $PLUGIN_VERSION" && \
+    dotnet publish --configuration Release --output="/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" && \
+    echo "Plugin built. Verifying DLL:" && \
+    find "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" -name "Jellyfin.Plugin.RequestsAddon.dll"
+
+# Preserve only the required DLL file
+RUN PLUGIN_VERSION=$(grep -oP 'PLUGIN_VERSION=\K.*' /etc/environment) && \
+    mkdir -p "/preserved_plugins/RequestsAddon_${PLUGIN_VERSION}" && \
+    find "/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}" -name "Jellyfin.Plugin.RequestsAddon.dll" \
+    -exec cp {} "/preserved_plugins/RequestsAddon_${PLUGIN_VERSION}/" \;
+
+# Copy the entrypoint script
+COPY docker/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Cleanup
+RUN apt-get remove -y dotnet-sdk-8.0 jq && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/jellyfin-requests && \
+    rm -rf /jellyfin/plugins/* && \
+    mkdir -p /jellyfin/plugins && \
+    cp -R /preserved_plugins/* /jellyfin/plugins/ && \
+    rm -rf /preserved_plugins
+
+# Verify plugin files after cleanup
+RUN echo "Contents of /jellyfin/plugins after cleanup:" && \
+    ls -R /jellyfin/plugins && \
+    echo "All DLL files in /jellyfin/plugins after cleanup:" && \
+    find /jellyfin/plugins -name "*.dll"
+
+# Set permissions for plugin directory
+RUN chmod -R 755 /jellyfin/plugins
+
 ARG JELLYFIN_VERSION
-LABEL "org.opencontainers.image.source"="https://github.com/jellyfin/jellyfin-packaging"
-LABEL "org.opencontainers.image.title"="Jellyfin"
+LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-packaging"
+LABEL "org.opencontainers.image.title"="Jellyfin with request"
 LABEL "org.opencontainers.image.description"="The Free Software Media System"
 LABEL "org.opencontainers.image.documentation"="https://jellyfin.org/docs/"
 LABEL "org.opencontainers.image.version"="${JELLYFIN_VERSION}"
@@ -237,7 +312,7 @@ LABEL "org.opencontainers.image.url"="https://jellyfin.org"
 
 EXPOSE 8096
 VOLUME ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR}
-ENTRYPOINT ["/jellyfin/jellyfin"]
-
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["/jellyfin/jellyfin"]
 HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
      CMD curl --noproxy 'localhost' -Lk -fsS "${HEALTHCHECK_URL}" || exit 1

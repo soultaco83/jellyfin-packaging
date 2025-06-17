@@ -1,0 +1,95 @@
+name: "Prod-- Build Docker"
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: false
+        type: string
+        default: 'master'
+        description: 'The server and web stable release tag ("vX.Y.Z") or "master"'
+
+permissions:
+  contents: write
+
+# Prevent concurrent runs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: "Checkout updated repository"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          submodules: true
+          
+      - name: "Set version and release type"
+        id: version
+        run: |
+          INPUT_VERSION="${{ inputs.version || 'master' }}"
+          if [[ "$INPUT_VERSION" == "master" ]]; then
+            echo "JELLYFIN_VERSION=$(date +'%Y%m%d%H')" >> $GITHUB_ENV
+            echo "JELLYFIN_RELEASE_TYPE=unstable" >> $GITHUB_ENV
+          elif [[ "$INPUT_VERSION" =~ ^v[0-9]+ ]]; then
+            echo "JELLYFIN_VERSION=$INPUT_VERSION" >> $GITHUB_ENV
+            echo "JELLYFIN_RELEASE_TYPE=stable" >> $GITHUB_ENV
+          else
+            echo "Invalid version input"
+            exit 1
+          fi
+          echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
+          
+      - name: "Install dependencies"
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes python3-yaml
+          pip install GitPython
+          
+      - name: "Set permissions for docker-entrypoint.sh"
+        run: |
+          if [ -f "docker/docker-entrypoint.sh" ]; then
+            chmod +x docker/docker-entrypoint.sh
+          else
+            echo "docker-entrypoint.sh not found, checking directory structure"
+            find . -name "docker-entrypoint.sh"
+          fi
+          
+      - name: "Run builder for Docker containers"
+        id: build
+        continue-on-error: true
+        run: |
+          sudo --preserve-env ./build.py ${{ env.JELLYFIN_VERSION }} docker amd64 --local
+          
+      - name: "Debug: List Docker images"
+        run: docker images
+        
+      - name: "Log in to Docker Hub"
+        id: login
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: "Push to Docker Hub"
+        run: |
+          SOURCE_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "${{ env.JELLYFIN_VERSION }}-amd64" | head -n 1)
+          
+          if [ -z "$SOURCE_IMAGE" ]; then
+            echo "Error: Could not find the source image"
+            docker images
+            exit 1
+          fi
+          
+          echo "Found source image: ${SOURCE_IMAGE}"
+          
+          # Tag and push dev and date-dev
+          echo "Tagging and pushing images..."
+          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:latest"
+          docker tag "${SOURCE_IMAGE}" "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-latest"
+          docker push "soultaco83/jellyfin_with_request:latest"
+          docker push "soultaco83/jellyfin_with_request:${{ env.BUILD_DATE }}-latest"
