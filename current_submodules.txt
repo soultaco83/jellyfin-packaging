@@ -1,0 +1,2 @@
+ 03d2c52bf2bd99c8c5e2d9b13147427354ff016a jellyfin-server (03d2c52bf)
+ 556ed19c7fb3163f62627fe4129688b6d6ef43d8 jellyfin-web (556ed19c7)

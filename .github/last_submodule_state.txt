@@ -1,0 +1,2 @@
++cdece21ee5232b62eefd0265a8e7f904c3e05be4 jellyfin-server (heads/master)
++9c2933b3bfb3564a342abf2f5d449e77ff129099 jellyfin-web (heads/master)
