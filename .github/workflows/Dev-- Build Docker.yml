@@ -79,7 +79,7 @@ jobs:
           if [ -f "docker/docker-entrypoint.sh" ]; then
             chmod +x docker/docker-entrypoint.sh
           fi
-          echo "Using Debian 13 (trixie) for optimized builds"
+          echo "Using Debian 12 (bookworm) for stable builds"
 
       - name: "Run builder for Docker containers"
         run: |
