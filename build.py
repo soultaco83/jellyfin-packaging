@@ -160,6 +160,7 @@ def build_docker(
         build_args.append(f"--build-arg TARGET_ARCH={TARGET_ARCH}")
         build_args.append(f"--build-arg JELLYFIN_VERSION={jellyfin_version}")
         build_args.append(f"--build-arg CONFIG={'Debug' if debug else 'Release'}")
+        build_args.append(f"--build-arg OS_VERSION=bookworm")
 
         # Determine framework versions
         framework_versions = _determine_framework_versions()
