@@ -148,7 +148,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: "Build and push Docker image"
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
@@ -162,6 +162,11 @@ jobs:
           build-args: |
             JELLYFIN_VERSION=${{ env.JELLYFIN_VERSION }}
             BUILDKIT_INLINE_CACHE=1
+            PACKAGE_ARCH=amd64
+            DOTNET_ARCH=x64
+            QEMU_ARCH=x86_64
+            IMAGE_ARCH=amd64
+            TARGET_ARCH=amd64
             
       - name: "Move cache"
         run: |
