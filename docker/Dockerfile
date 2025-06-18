@@ -78,16 +78,11 @@ ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 
 WORKDIR ${SOURCE_DIR}
 
-# Copy project files first for better caching
-COPY jellyfin-server/*.sln ./
-COPY jellyfin-server/*/*.csproj ./
-RUN for file in $(ls *.csproj); do mkdir -p ${file%.*}/ && mv $file ${file%.*}/; done
-
-# Restore dependencies
+# Copy source and restore dependencies
+COPY jellyfin-server .
 RUN dotnet restore --runtime linux-${DOTNET_ARCH}
 
 # Copy source and build
-COPY jellyfin-server .
 RUN dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFIG} \
     --output="${ARTIFACT_DIR}" --self-contained --no-restore \
     -p:DebugSymbols=false -p:DebugType=none
