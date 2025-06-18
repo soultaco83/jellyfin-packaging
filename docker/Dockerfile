@@ -226,9 +226,6 @@ COPY --from=web /web /jellyfin/jellyfin-web
 
 RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
 
-# Copy the plugin files from the submodule
-COPY jellyfin-requests /tmp/jellyfin-requests
-
 # Install dependencies for plugin and JSON parsing
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -252,7 +249,7 @@ RUN apt-get update && \
 # Download and extract plugin
 RUN LATEST_RELEASE=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.tag_name') \
  && echo "Latest plugin version: $LATEST_RELEASE" \
- && echo "PLUGIN_VERSION=$LATEST_RELEASE" > /plugin_version \
+ && echo "PLUGIN_VERSION=$LATEST_RELEASE" >> /etc/environment \
  && curl -L "https://github.com/soultaco83/Jellyfin_requests_plugin/releases/download/${LATEST_RELEASE}/Jellyfin.Plugin.RequestsAddon.zip" -o /plugin.zip \
  && mkdir -p "/plugin/RequestsAddon_${LATEST_RELEASE}" \
  && unzip /plugin.zip -d "/plugin/RequestsAddon_${LATEST_RELEASE}/"
@@ -261,20 +258,16 @@ RUN LATEST_RELEASE=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_re
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Cleanup
-RUN apt-get remove -y dotnet-sdk-8.0 jq && \
+# Cleanup build dependencies
+RUN apt-get remove -y dotnet-sdk-8.0 jq wget software-properties-common && \
     apt-get autoremove -y && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/jellyfin-requests && \
-    rm -rf /jellyfin/plugins/* && \
-    mkdir -p /jellyfin/plugins && \
-    cp -R /preserved_plugins/* /jellyfin/plugins/ && \
-    rm -rf /preserved_plugins
+    rm -rf /var/lib/apt/lists/*
 
-# Verify plugin files after cleanup
-RUN echo "Contents of /jellyfin/plugins after cleanup:" && \
+# Verify plugin installation
+RUN echo "Contents of /jellyfin/plugins after installation:" && \
     ls -R /jellyfin/plugins && \
-    echo "All DLL files in /jellyfin/plugins after cleanup:" && \
+    echo "All DLL files in /jellyfin/plugins:" && \
     find /jellyfin/plugins -name "*.dll"
 
 # Set permissions for plugin directory
