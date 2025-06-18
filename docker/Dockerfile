@@ -125,7 +125,7 @@ COPY --from=qemu /usr/bin/* /usr/bin
 # Set the health URL
 ENV HEALTHCHECK_URL=http://localhost:8096/health
 
-# Default environment variables for the Jellyfin invocation
+# Default environment variables for the Jellyfin invocation (WITHOUT LD_PRELOAD for now)
 ENV DEBIAN_FRONTEND="noninteractive" \
     LC_ALL="en_US.UTF-8" \
     LANG="en_US.UTF-8" \
@@ -140,8 +140,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     XDG_CACHE_HOME=${JELLYFIN_CACHE_DIR} \
     MALLOC_TRIM_THRESHOLD_=131072 \
     NVIDIA_VISIBLE_DEVICES="all" \
-    NVIDIA_DRIVER_CAPABILITIES="compute,video,utility" \
-    LD_PRELOAD=/usr/lib/jellyfin/libjemalloc.so.2
+    NVIDIA_DRIVER_CAPABILITIES="compute,video,utility"
 
 # Install base dependencies in one optimized layer
 RUN apt-get update \
@@ -189,14 +188,26 @@ RUN mkdir intel-compute-runtime \
  && apt-get autoremove --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
-# Setup jemalloc (amd64 only)
+# Setup jemalloc and set LD_PRELOAD only after the library is available
 RUN mkdir -p /usr/lib/jellyfin \
- && if [ -f "/usr/lib/x86_64-linux-gnu/libjemalloc.so.2" ]; then \
-        ln -s /usr/lib/x86_64-linux-gnu/libjemalloc.so.2 /usr/lib/jellyfin/libjemalloc.so.2; \
-        echo "jemalloc library linked successfully for amd64."; \
+ && JEMALLOC_LINKED=0 \
+ && if [ "${PACKAGE_ARCH}" = "amd64" ]; then \
+        if [ -f "/usr/lib/x86_64-linux-gnu/libjemalloc.so.2" ]; then \
+            ln -s /usr/lib/x86_64-linux-gnu/libjemalloc.so.2 /usr/lib/jellyfin/libjemalloc.so.2 && JEMALLOC_LINKED=1; \
+        fi; \
+    elif [ "${PACKAGE_ARCH}" = "arm64" ]; then \
+        if [ -f "/usr/lib/aarch64-linux-gnu/libjemalloc.so.2" ]; then \
+            ln -s /usr/lib/aarch64-linux-gnu/libjemalloc.so.2 /usr/lib/jellyfin/libjemalloc.so.2 && JEMALLOC_LINKED=1; \
+        fi; \
+    fi \
+ && if [ "$JEMALLOC_LINKED" -eq 1 ]; then \
+        echo "jemalloc library linked successfully for ${PACKAGE_ARCH}." ; \
     else \
-        echo "WARNING: jemalloc library not found for amd64." >&2; \
+        echo "WARNING: jemalloc library .so file not found for PACKAGE_ARCH ${PACKAGE_ARCH}. Either the arch is not supported or copy failed. LD_PRELOAD might not work as expected." >&2; \
     fi
+
+# Set LD_PRELOAD ONLY after jemalloc is properly linked
+ENV LD_PRELOAD=/usr/lib/jellyfin/libjemalloc.so.2
 
 # Create directories and copy artifacts
 RUN mkdir -p ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR} \
