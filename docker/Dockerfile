@@ -40,7 +40,7 @@ ARG ARTIFACT_DIR=/web
 ARG JELLYFIN_VERSION
 ENV JELLYFIN_VERSION=${JELLYFIN_VERSION}
 
-# Install all dependencies in one layer
+# Install dependencies in a single layer with cache mount
 RUN apk add --no-cache \
     autoconf \
     g++ \
@@ -58,11 +58,15 @@ RUN apk add --no-cache \
  && git config --global --add safe.directory /jellyfin/jellyfin-web
 
 WORKDIR ${SOURCE_DIR}
-COPY jellyfin-web .
 
-# Build web assets
-RUN npm ci --no-audit --unsafe-perm \
- && npm run build:production \
+# Copy package files first for better caching
+COPY jellyfin-web/package*.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --unsafe-perm
+
+# Copy source and build
+COPY jellyfin-web .
+RUN npm run build:production \
  && mv dist ${ARTIFACT_DIR}
 
 #
@@ -78,46 +82,137 @@ ENV CONFIG=${CONFIG}
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 
 WORKDIR ${SOURCE_DIR}
-COPY jellyfin-server .
 
-# Build server in one step
-RUN dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFIG} \
-    --output="${ARTIFACT_DIR}" --self-contained \
+# Copy project files first for better caching
+COPY jellyfin-server/*.sln ./
+COPY jellyfin-server/*/*.csproj ./
+RUN for file in $(ls *.csproj); do mkdir -p ${file%.*}/ && mv $file ${file%.*}/; done
+
+# Restore dependencies with cache
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    dotnet restore --runtime linux-${DOTNET_ARCH}
+
+# Copy source and build
+COPY jellyfin-server .
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFIG} \
+    --output="${ARTIFACT_DIR}" --self-contained --no-restore \
     -p:DebugSymbols=false -p:DebugType=none
 
 #
-# Download latest plugin release
+# Download latest plugin release (cached)
 #
 FROM alpine:latest as plugin
 
+# Install tools
 RUN apk add --no-cache curl jq unzip
 
-# Download and extract the latest plugin release
-RUN LATEST_RELEASE=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.tag_name') \
+# Download and extract plugin with cache consideration
+ARG BUILDKIT_INLINE_CACHE=1
+RUN --mount=type=cache,target=/plugin-cache \
+    LATEST_RELEASE=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.tag_name') \
  && echo "Latest plugin version: $LATEST_RELEASE" \
  && echo "PLUGIN_VERSION=$LATEST_RELEASE" > /plugin_version \
- && curl -L "https://github.com/soultaco83/Jellyfin_requests_plugin/releases/download/${LATEST_RELEASE}/Jellyfin.Plugin.RequestsAddon.zip" -o /plugin.zip \
+ && CACHE_FILE="/plugin-cache/plugin-${LATEST_RELEASE}.zip" \
+ && if [ ! -f "$CACHE_FILE" ]; then \
+        curl -L "https://github.com/soultaco83/Jellyfin_requests_plugin/releases/download/${LATEST_RELEASE}/Jellyfin.Plugin.RequestsAddon.zip" -o "$CACHE_FILE"; \
+    fi \
  && mkdir -p "/plugin/RequestsAddon_${LATEST_RELEASE}" \
- && unzip /plugin.zip -d "/plugin/RequestsAddon_${LATEST_RELEASE}/" \
- && ls -la "/plugin/RequestsAddon_${LATEST_RELEASE}/"
+ && unzip "$CACHE_FILE" -d "/plugin/RequestsAddon_${LATEST_RELEASE}/"
 
 #
-# Build the final combined image
+# Base runtime dependencies (cached layer)
 #
-FROM multiarch/qemu-user-static:x86_64-${QEMU_ARCH} as qemu
-FROM --platform=linux/${TARGET_ARCH} ${IMAGE_ARCH}/debian:${OS_VERSION}-slim as combined
+FROM --platform=linux/${TARGET_ARCH} ${IMAGE_ARCH}/debian:${OS_VERSION}-slim as runtime-base
 
 ARG OS_VERSION
+ARG PACKAGE_ARCH
+
+# Install base system dependencies
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update \
+ && apt-get upgrade -y \
+ && apt-get install --no-install-recommends --no-install-suggests --yes \
+    ca-certificates \
+    gnupg \
+    curl \
+    apt-transport-https \
+    zip \
+    cron \
+    openssl \
+    locales \
+    libfontconfig1 \
+    libfreetype6 \
+    libjemalloc2 \
+    sqlite3 \
+ && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen
+
+#
+# FFMPEG and Jellyfin repo setup (separate layer for caching)
+#
+FROM runtime-base as jellyfin-deps
+
 ARG FFMPEG_PACKAGE
+ARG PACKAGE_ARCH
+ARG OS_VERSION
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key \
+  | gpg --dearmor -o /etc/apt/trusted.gpg.d/debian-jellyfin.gpg \
+ && echo "deb [arch=${PACKAGE_ARCH}] https://repo.jellyfin.org/master/debian ${OS_VERSION} main" > /etc/apt/sources.list.d/jellyfin.list \
+ && apt-get update \
+ && apt-get install --no-install-recommends --no-install-suggests --yes \
+    ${FFMPEG_PACKAGE} \
+ && apt-get remove gnupg apt-transport-https --yes \
+ && apt-get autoremove --yes
+
+#
+# Intel OpenCL dependencies (separate cached layer)
+#
+FROM jellyfin-deps as intel-deps
+
 ARG GMMLIB_VER
 ARG IGC2_VER
 ARG IGC2_BUILD
 ARG NEO_VER
 ARG IGC1_LEGACY_VER
 ARG NEO_LEGACY_VER
-ARG PACKAGE_ARCH
+
+# Intel OpenCL runtime with cache
+RUN --mount=type=cache,target=/intel-cache \
+    mkdir -p /intel-compute-runtime && cd /intel-compute-runtime \
+ && for file in \
+    "libigdgmm12_${GMMLIB_VER}_amd64.deb" \
+    "intel-igc-core-2_${IGC2_VER}+${IGC2_BUILD}_amd64.deb" \
+    "intel-igc-opencl-2_${IGC2_VER}+${IGC2_BUILD}_amd64.deb" \
+    "intel-opencl-icd_${NEO_VER}_amd64.deb" \
+    "intel-igc-core_${IGC1_LEGACY_VER}_amd64.deb" \
+    "intel-igc-opencl_${IGC1_LEGACY_VER}_amd64.deb" \
+    "intel-opencl-icd-legacy1_${NEO_LEGACY_VER}_amd64.deb"; do \
+        if [ ! -f "/intel-cache/$file" ]; then \
+            case "$file" in \
+                "libigdgmm12"*) curl -L -o "/intel-cache/$file" "https://github.com/intel/compute-runtime/releases/download/${NEO_VER}/$file" ;; \
+                "intel-igc-core-2"*|"intel-igc-opencl-2"*) curl -L -o "/intel-cache/$file" "https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC2_VER}/$file" ;; \
+                "intel-opencl-icd_"*) curl -L -o "/intel-cache/$file" "https://github.com/intel/compute-runtime/releases/download/${NEO_VER}/$file" ;; \
+                "intel-igc-core_"*|"intel-igc-opencl_"*) curl -L -o "/intel-cache/$file" "https://github.com/intel/intel-graphics-compiler/releases/download/igc-${IGC1_LEGACY_VER}/$file" ;; \
+                "intel-opencl-icd-legacy1"*) curl -L -o "/intel-cache/$file" "https://github.com/intel/compute-runtime/releases/download/${NEO_LEGACY_VER}/$file" ;; \
+            esac; \
+        fi; \
+        cp "/intel-cache/$file" .; \
+    done \
+ && apt-get install --no-install-recommends --no-install-suggests -f -y ./*.deb \
+ && cd .. && rm -rf /intel-compute-runtime
+
+#
+# Build the final combined image
+#
+FROM multiarch/qemu-user-static:x86_64-${QEMU_ARCH} as qemu
+FROM intel-deps as combined
+
 ARG DOTNET_ARCH
-ARG QEMU_ARCH
+ARG PACKAGE_ARCH
 
 # Copy the QEMU runtime
 COPY --from=qemu /usr/bin/* /usr/bin
@@ -125,7 +220,7 @@ COPY --from=qemu /usr/bin/* /usr/bin
 # Set the health URL
 ENV HEALTHCHECK_URL=http://localhost:8096/health
 
-# Default environment variables for the Jellyfin invocation (WITHOUT LD_PRELOAD for now)
+# Default environment variables
 ENV DEBIAN_FRONTEND="noninteractive" \
     LC_ALL="en_US.UTF-8" \
     LANG="en_US.UTF-8" \
@@ -142,94 +237,44 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     NVIDIA_VISIBLE_DEVICES="all" \
     NVIDIA_DRIVER_CAPABILITIES="compute,video,utility"
 
-# Install base dependencies in one optimized layer
-RUN apt-get update \
- && apt-get upgrade -y \
- && apt-get install --no-install-recommends --no-install-suggests --yes \
-    ca-certificates \
-    gnupg \
-    curl \
-    apt-transport-https \
-    zip \
-    cron \
-    openssl \
-    locales \
-    libfontconfig1 \
-    libfreetype6 \
-    libjemalloc2 \
-    sqlite3 \
- && curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key \
-  | gpg --dearmor -o /etc/apt/trusted.gpg.d/debian-jellyfin.gpg \
- && echo "deb [arch=${PACKAGE_ARCH}] https://repo.jellyfin.org/master/debian ${OS_VERSION} main" > /etc/apt/sources.list.d/jellyfin.list \
- && apt-get update \
- && apt-get install --no-install-recommends --no-install-suggests --yes \
-    ${FFMPEG_PACKAGE} \
- && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen \
- && apt-get remove gnupg apt-transport-https --yes \
- && apt-get clean autoclean --yes \
- && apt-get autoremove --yes \
- && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
-
-# Intel OpenCL Tone mapping dependencies (amd64 only)
-RUN mkdir intel-compute-runtime \
- && cd intel-compute-runtime \
- && curl -L --parallel --parallel-immediate --parallel-max 7 \
-    -O https://github.com/intel/compute-runtime/releases/download/${NEO_VER}/libigdgmm12_${GMMLIB_VER}_amd64.deb \
-    -O https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC2_VER}/intel-igc-core-2_${IGC2_VER}+${IGC2_BUILD}_amd64.deb \
-    -O https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC2_VER}/intel-igc-opencl-2_${IGC2_VER}+${IGC2_BUILD}_amd64.deb \
-    -O https://github.com/intel/compute-runtime/releases/download/${NEO_VER}/intel-opencl-icd_${NEO_VER}_amd64.deb \
-    -O https://github.com/intel/intel-graphics-compiler/releases/download/igc-${IGC1_LEGACY_VER}/intel-igc-core_${IGC1_LEGACY_VER}_amd64.deb \
-    -O https://github.com/intel/intel-graphics-compiler/releases/download/igc-${IGC1_LEGACY_VER}/intel-igc-opencl_${IGC1_LEGACY_VER}_amd64.deb \
-    -O https://github.com/intel/compute-runtime/releases/download/${NEO_LEGACY_VER}/intel-opencl-icd-legacy1_${NEO_LEGACY_VER}_amd64.deb \
- && apt-get install --no-install-recommends --no-install-suggests -f -y ./*.deb \
- && cd .. \
- && rm -rf intel-compute-runtime \
- && apt-get clean autoclean --yes \
- && apt-get autoremove --yes \
- && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
-
-# Setup jemalloc and set LD_PRELOAD only after the library is available
+# Setup jemalloc with optimized linking
 RUN mkdir -p /usr/lib/jellyfin \
- && JEMALLOC_LINKED=0 \
- && if [ "${PACKAGE_ARCH}" = "amd64" ]; then \
-        if [ -f "/usr/lib/x86_64-linux-gnu/libjemalloc.so.2" ]; then \
-            ln -s /usr/lib/x86_64-linux-gnu/libjemalloc.so.2 /usr/lib/jellyfin/libjemalloc.so.2 && JEMALLOC_LINKED=1; \
-        fi; \
-    elif [ "${PACKAGE_ARCH}" = "arm64" ]; then \
-        if [ -f "/usr/lib/aarch64-linux-gnu/libjemalloc.so.2" ]; then \
-            ln -s /usr/lib/aarch64-linux-gnu/libjemalloc.so.2 /usr/lib/jellyfin/libjemalloc.so.2 && JEMALLOC_LINKED=1; \
-        fi; \
-    fi \
- && if [ "$JEMALLOC_LINKED" -eq 1 ]; then \
-        echo "jemalloc library linked successfully for ${PACKAGE_ARCH}." ; \
+ && case "${PACKAGE_ARCH}" in \
+        "amd64") JEMALLOC_PATH="/usr/lib/x86_64-linux-gnu/libjemalloc.so.2" ;; \
+        "arm64") JEMALLOC_PATH="/usr/lib/aarch64-linux-gnu/libjemalloc.so.2" ;; \
+        *) JEMALLOC_PATH="" ;; \
+    esac \
+ && if [ -n "$JEMALLOC_PATH" ] && [ -f "$JEMALLOC_PATH" ]; then \
+        ln -s "$JEMALLOC_PATH" /usr/lib/jellyfin/libjemalloc.so.2 \
+        && echo "jemalloc linked for ${PACKAGE_ARCH}"; \
     else \
-        echo "WARNING: jemalloc library .so file not found for PACKAGE_ARCH ${PACKAGE_ARCH}. Either the arch is not supported or copy failed. LD_PRELOAD might not work as expected." >&2; \
+        echo "WARNING: jemalloc not available for ${PACKAGE_ARCH}" >&2; \
     fi
 
-# Set LD_PRELOAD ONLY after jemalloc is properly linked
+# Set LD_PRELOAD only if jemalloc is available
 ENV LD_PRELOAD=/usr/lib/jellyfin/libjemalloc.so.2
 
-# Create directories and copy artifacts
+# Create directories
 RUN mkdir -p ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR} \
  && chmod 777 ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR}
 
+# Copy artifacts from build stages
 COPY --from=server /server /jellyfin
 COPY --from=web /web /jellyfin/jellyfin-web
 COPY --from=plugin /plugin /jellyfin/plugins
 COPY --from=plugin /plugin_version /etc/environment
 
-# Set permissions in one layer
+# Set permissions
 RUN chmod 777 -R ${JELLYFIN_WEB_DIR} \
  && chmod -R 755 /jellyfin/plugins
 
-# Copy the optimized entrypoint script
+# Copy the entrypoint script
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Verify plugin installation
-RUN echo "Contents of /jellyfin/plugins after setup:" \
- && ls -R /jellyfin/plugins \
- && echo "Plugin version:" \
+RUN echo "Plugin setup verification:" \
+ && ls -la /jellyfin/plugins \
  && cat /etc/environment
 
 ARG JELLYFIN_VERSION
