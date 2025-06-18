@@ -185,14 +185,12 @@ RUN mkdir -p /intel-compute-runtime && cd /intel-compute-runtime \
 #
 # Build the final combined image
 #
-FROM multiarch/qemu-user-static:x86_64-x86_64 AS qemu
 FROM intel-deps AS combined
 
 ARG DOTNET_ARCH=x64
 ARG PACKAGE_ARCH=amd64
 
-# Copy the QEMU runtime
-COPY --from=qemu /usr/bin/* /usr/bin
+# Note: QEMU not needed for amd64 -> amd64 builds
 
 # Set the health URL
 ENV HEALTHCHECK_URL=http://localhost:8096/health
