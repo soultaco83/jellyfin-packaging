@@ -27,8 +27,6 @@ ARG MALI_PKG_CFG=valhall-g610-g24p0-gbm
 ARG PACKAGE_ARCH
 # Dotnet architeture (x64, arm64, arm), set by build script
 ARG DOTNET_ARCH
-# QEMU architecture (x86_64, aarch64, arm), set by build script
-ARG QEMU_ARCH
 # Base Image architecture (amd64, arm64v8, arm32v7), set by build script
 ARG IMAGE_ARCH
 # Target platform architecture (amd64, arm64/v8, arm/v7), set by build script
@@ -95,7 +93,6 @@ RUN dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFI
 #
 # Build the final combined image
 #
-FROM multiarch/qemu-user-static:x86_64-${QEMU_ARCH} as qemu
 FROM --platform=linux/${TARGET_ARCH} ${IMAGE_ARCH}/debian:${OS_VERSION}-slim as combined
 
 ARG OS_VERSION
@@ -114,10 +111,6 @@ ARG MALI_PKG_CFG
 
 ARG PACKAGE_ARCH
 ARG DOTNET_ARCH
-ARG QEMU_ARCH
-
-# Copy the QEMU runtime
-COPY --from=qemu /usr/bin/* /usr/bin
 
 # Set the health URL
 ENV HEALTHCHECK_URL=http://localhost:8096/health
