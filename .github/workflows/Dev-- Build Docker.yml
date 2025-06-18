@@ -29,6 +29,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes python3-git python3-yaml
+          pip install GitPython PyYAML
 
       - name: "Checkout repository"
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -39,6 +40,7 @@ jobs:
 
       - name: "Prepare repository"
         run: |
+          chmod +x ./checkout.py
           ./checkout.py master
 
       - name: "Commit and push submodule updates"
@@ -77,6 +79,7 @@ jobs:
           if [ -f "docker/docker-entrypoint.sh" ]; then
             chmod +x docker/docker-entrypoint.sh
           fi
+          echo "Using Debian 13 (trixie) for optimized builds"
 
       - name: "Run builder for Docker containers"
         run: |
