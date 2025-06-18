@@ -338,7 +338,6 @@ def usage():
 # Define a map of possible build functions from the YAML configuration
 function_definitions = {
     "build_docker": build_docker,
-    "build_nuget": build_nuget,
 }
 
 
