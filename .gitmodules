@@ -8,4 +8,4 @@
 
 [submodule "jellyfin-requests"]
 	path = jellyfin-requests
-	url = https://github.com/jellyfin/jellyfin-plugin-requests.git
+	url = https://github.com/soultaco83/jellyfin_plugin_requests
