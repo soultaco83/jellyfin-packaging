@@ -26,23 +26,23 @@ perform_db_backup() {
     mkdir -p "${BACKUP_DIR}"
 
     # Create a list of existing files to backup
-    FILES_TO_BACKUP=""
+    local files_to_backup=()
     for db_file in "${DB_FILES[@]}"; do
         if [ -f "$db_file" ]; then
-            FILES_TO_BACKUP="${FILES_TO_BACKUP} $(basename "$db_file")"
+            files_to_backup+=("$(basename "$db_file")")
         fi
     done
 
     # Only attempt zip if we found files to backup
-    if [ ! -z "$FILES_TO_BACKUP" ]; then
-        echo "$(date '+%H:%M:%S') - Found database files to backup: $FILES_TO_BACKUP"
+    if [ ${#files_to_backup[@]} -gt 0 ]; then
+        echo "$(date '+%H:%M:%S') - Found database files to backup: ${files_to_backup[*]}"
         cd /config/data
         # Use fastest compression level (-1) for speed
-        if zip -1 "${BACKUP_DIR}/jellyfinDB-${BACKUP_TIMESTAMP}.zip" ${FILES_TO_BACKUP} 2>/dev/null; then
+        if zip -1 "${BACKUP_DIR}/jellyfinDB-${BACKUP_TIMESTAMP}.zip" "${files_to_backup[@]}" 2>/dev/null; then
             echo "$(date '+%H:%M:%S') - Database backup created successfully"
             
             # Keep only the last 5 database backups (run in background)
-            (find "${BACKUP_DIR}" -name "jellyfinDB-*.zip" -type f -printf '%T@ %p\n' | sort -rn | tail -n +6 | cut -d' ' -f2- | xargs rm -f 2>/dev/null || true) &
+            (find "${BACKUP_DIR}" -name "jellyfinDB-*.zip" -type f -printf '%T@ %p\n' | sort -rn | tail -n +6 | cut -d' ' -f2- | xargs -r rm -f 2>/dev/null) &
         else
             echo "$(date '+%H:%M:%S') - Warning: Database backup creation failed, but continuing with container startup"
         fi
@@ -64,7 +64,7 @@ perform_config_backup() {
             echo "$(date '+%H:%M:%S') - Config backup created successfully"
             
             # Keep only the last 5 config backups (run in background)
-            (find "${BACKUP_DIR}" -name "configs-*.zip" -type f | sort -r | tail -n +6 | xargs rm -f 2>/dev/null || true) &
+            (find "${BACKUP_DIR}" -name "configs-*.zip" -type f | sort -r | tail -n +6 | xargs -r rm -f 2>/dev/null) &
         else
             echo "$(date '+%H:%M:%S') - Warning: Config backup creation failed, but continuing with container startup"
         fi
@@ -73,37 +73,40 @@ perform_config_backup() {
     fi
 }
 
-# Function to setup plugin (can run in parallel with other non-DB operations)
+# Function to setup plugin (simplified since plugin is now pre-downloaded)
 setup_plugin() {
-    # Get plugin version silently
-    PLUGIN_VERSION=$(grep -oP 'PLUGIN_VERSION=\K.*' /etc/environment 2>/dev/null)
+    # Get plugin version from the build
+    local plugin_version
+    plugin_version=$(grep -oP 'PLUGIN_VERSION=\K.*' /etc/environment 2>/dev/null)
 
-    # Exit if version not found
-    if [ -z "$PLUGIN_VERSION" ]; then
+    if [ -z "$plugin_version" ]; then
         echo "$(date '+%H:%M:%S') - Error: Could not determine plugin version"
         return 1
     fi
 
-    # Clean existing installations silently
+    echo "$(date '+%H:%M:%S') - Setting up RequestsAddon plugin version: $plugin_version"
+
+    # Clean existing installations
     rm -rf /config/plugins/RequestsAddon_* 2>/dev/null || true
 
     # Set up paths
-    SOURCE_DIR="/jellyfin/plugins/RequestsAddon_${PLUGIN_VERSION}"
-    DLL_FILE="${SOURCE_DIR}/Jellyfin.Plugin.RequestsAddon.dll"
-    TARGET_DIR="/config/plugins/RequestsAddon_${PLUGIN_VERSION}"
+    local source_dir="/jellyfin/plugins/RequestsAddon_${plugin_version}"
+    local target_dir="/config/plugins/RequestsAddon_${plugin_version}"
 
-    # Verify DLL exists
-    if [ ! -f "$DLL_FILE" ]; then
-        echo "$(date '+%H:%M:%S') - Error: Plugin DLL not found"
+    # Check if the pre-built plugin exists
+    if [ ! -d "$source_dir" ] || [ ! -f "${source_dir}/Jellyfin.Plugin.RequestsAddon.dll" ]; then
+        echo "$(date '+%H:%M:%S') - Error: Plugin directory or DLL not found at $source_dir"
         return 1
     fi
 
-    # Install plugin
-    mkdir -p "${TARGET_DIR}"
-    cp "${DLL_FILE}" "${TARGET_DIR}/"
-    chown root:root "${TARGET_DIR}/Jellyfin.Plugin.RequestsAddon.dll"
-    chmod 755 "${TARGET_DIR}/Jellyfin.Plugin.RequestsAddon.dll"
+    # Install plugin by copying the entire directory
+    mkdir -p "${target_dir}"
+    cp -r "${source_dir}"/* "${target_dir}/"
+    chown -R root:root "${target_dir}"
+    chmod -R 755 "${target_dir}"
+    
     echo "$(date '+%H:%M:%S') - RequestsAddon plugin installed successfully"
+    return 0
 }
 
 # Function to setup cron and cleanup script
@@ -111,18 +114,16 @@ setup_cron() {
     # Create cleanup script (fix for subtitles not playing)
     cat > /usr/local/bin/cleanup-db.sh << 'EOF'
 #!/bin/bash
-sqlite3 /config/data/jellyfin.db "delete from AttachmentStreamInfos"
+sqlite3 /config/data/jellyfin.db "delete from AttachmentStreamInfos" 2>/dev/null || true
 echo "$(date) - Cleaned AttachmentStreamInfos table" >> /config/log/db-cleanup.log
 EOF
 
-    # Make it executable
+    # Make it executable and set up cron job
     chmod +x /usr/local/bin/cleanup-db.sh
-
-    # Set up cron job to run hourly
     echo "0 * * * * /usr/local/bin/cleanup-db.sh" > /etc/cron.d/db-cleanup
     chmod 0644 /etc/cron.d/db-cleanup
 
-    # Apply cron job and start service
+    # Apply cron job and start service (suppress output)
     crontab /etc/cron.d/db-cleanup &> /dev/null
     service cron start &> /dev/null
 }
@@ -151,50 +152,48 @@ if [ -f "$DOCKER_BUILD_FILE" ]; then
 fi
 
 # Determine if backup is needed
-BACKUP_NEEDED=false
-BACKUP_REASON=""
+backup_needed=false
+backup_reason=""
 
 if [ ! -f "$CONTAINER_MARKER" ]; then
-    BACKUP_NEEDED=true
-    BACKUP_REASON="New container detected"
+    backup_needed=true
+    backup_reason="New container detected"
 elif [ -f "$DOCKER_BUILD_FILE" ]; then
-    LAST_BUILD_TIME=$(cat "$DOCKER_BUILD_FILE")
-    if [ "$LAST_BUILD_TIME" != "$CURRENT_BUILD_TIME" ]; then
-        BACKUP_NEEDED=true
-        BACKUP_REASON="Docker image update detected (Build signature changed)"
+    last_build_time=$(cat "$DOCKER_BUILD_FILE")
+    if [ "$last_build_time" != "$CURRENT_BUILD_TIME" ]; then
+        backup_needed=true
+        backup_reason="Docker image update detected (Build signature changed)"
     else
         echo "$(date '+%H:%M:%S') - Same Docker image detected, skipping backups..."
     fi
 else
-    BACKUP_NEEDED=true
-    BACKUP_REASON="No Docker image history found"
+    backup_needed=true
+    backup_reason="No Docker image history found"
 fi
 
 # Start parallel operations that don't require database to be stopped
 echo "$(date '+%H:%M:%S') - Starting parallel setup operations..."
 
-# Start non-critical operations in background
-(
+# Start all non-critical operations in background
+{
     setup_cron
     echo "$(date '+%H:%M:%S') - Cron setup completed"
-) &
-CRON_PID=$!
+} &
 
-(
+{
     apply_temp_fixes
     echo "$(date '+%H:%M:%S') - Temp fixes applied"
-) &
-FIXES_PID=$!
+} &
 
-# Setup plugin (this touches filesystem but not the database)
-setup_plugin &
-PLUGIN_PID=$!
+# Setup plugin (this is critical and must complete before Jellyfin starts)
+if ! setup_plugin; then
+    echo "$(date '+%H:%M:%S') - CRITICAL: Plugin setup failed. Container will continue but plugin may not work."
+fi
 
 # Perform backups if needed (these MUST complete before Jellyfin starts)
-if [ "$BACKUP_NEEDED" = true ]; then
-    # Both database and config backups are CRITICAL and must complete before Jellyfin starts
+if [ "$backup_needed" = true ]; then
     echo "$(date '+%H:%M:%S') - Performing critical backups..."
-    perform_db_backup "$BACKUP_REASON"
+    perform_db_backup "$backup_reason"
     perform_config_backup
     
     # Update build signature
@@ -202,18 +201,8 @@ if [ "$BACKUP_NEEDED" = true ]; then
     echo "$(date '+%H:%M:%S') - Critical backups completed"
 fi
 
-# Wait for critical operations to complete
-echo "$(date '+%H:%M:%S') - Waiting for setup operations to complete..."
-
-# Wait for plugin setup (critical for Jellyfin)
-wait $PLUGIN_PID
-echo "$(date '+%H:%M:%S') - Plugin setup completed"
-
-# Wait for other background operations
-wait $CRON_PID 2>/dev/null || true
-wait $FIXES_PID 2>/dev/null || true
-
-# Config backup is now handled synchronously above, so no waiting needed here
+# Wait for all background operations to complete
+wait
 
 # Update marker file
 touch "$CONTAINER_MARKER"
