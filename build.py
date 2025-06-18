@@ -160,7 +160,6 @@ def build_docker(
         build_args.append(f"--build-arg TARGET_ARCH={TARGET_ARCH}")
         build_args.append(f"--build-arg JELLYFIN_VERSION={jellyfin_version}")
         build_args.append(f"--build-arg CONFIG={'Debug' if debug else 'Release'}")
-        build_args.append(f"--build-arg OS_VERSION=bookworm")
 
         # Determine framework versions
         framework_versions = _determine_framework_versions()
@@ -318,6 +317,70 @@ def build_docker(
     # Log out of GHCR
     os.system("docker logout")
 
+
+def build_nuget(
+    jellyfin_version, build_type, _build_arch, _build_version, local=False, debug=False
+):
+    """
+    Pack and upload nuget packages
+    """
+    log("> Building Nuget packages...")
+    log("")
+
+    project_files = configurations["nuget"]["projects"]
+    log(project_files)
+
+    # Determine if this is a "latest"-type image (v in jellyfin_version) or not
+    if "v" in jellyfin_version and not "rc" in jellyfin_version:
+        is_stable = True
+        is_preview = False
+    elif "rc" in jellyfin_version:
+        is_stable = False
+        is_preview = True
+    else:
+        is_stable = False
+        is_preview = False
+
+    jellyfin_version = jellyfin_version.replace("v", "")
+
+    # Set today's date in a convenient format for use as an image suffix
+    date = datetime.now().strftime("%Y%m%d%H%M%S")
+
+    pack_command_base = "dotnet pack -o out/nuget/"
+    if is_stable or is_preview:
+        pack_command = f"{pack_command_base} -p:Version={jellyfin_version}"
+    else:
+        pack_command = (
+            f"{pack_command_base} --version-suffix {date} -p:Stability=Unstable"
+        )
+
+    for project in project_files:
+        log(f">> Packing  {project}...")
+        log("")
+
+        project_pack_command = f"{pack_command} jellyfin-server/{project}"
+        log(f">>>> {project_pack_command}")
+        os.system(project_pack_command)
+
+    if local:
+        return
+
+    if is_stable or is_preview:
+        nuget_repo = configurations["nuget"]["feed_urls"]["stable"]
+        nuget_key = getenv("NUGET_STABLE_KEY")
+    else:
+        nuget_repo = configurations["nuget"]["feed_urls"]["unstable"]
+        nuget_key = getenv("NUGET_UNSTABLE_KEY")
+
+    if nuget_key is None:
+        log(f"Error: Failed to get NUGET_*_KEY environment variable")
+        exit(1)
+
+    push_command = f"dotnet nuget push out/nuget/*.nupkg -s {nuget_repo} -k {nuget_key}"
+    log(f">>>> {push_command}")
+    os.system(push_command)
+
+
 def usage():
     """
     Print usage information on error
@@ -338,6 +401,7 @@ def usage():
 # Define a map of possible build functions from the YAML configuration
 function_definitions = {
     "build_docker": build_docker,
+    "build_nuget": build_nuget,
 }
 
 

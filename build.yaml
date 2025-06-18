@@ -1,3 +1,4 @@
+---
 # Build definitions for `build.py`
 
 # Upstream Framework versions
@@ -31,7 +32,7 @@ docker:
       QEMU_ARCH: x86_64
       TARGET_ARCH: amd64
   dockerfile: docker/Dockerfile
-  imagename: soultaco83/jellyfin
+  imagename: jellyfin/jellyfin
 
 # Nuget packages
 nuget:

@@ -1,6 +1,8 @@
-# Docker build arguments with defaults for GitHub Actions
+# Docker build arguments
 ARG DOTNET_VERSION=8.0
 ARG NODEJS_VERSION=20
+
+# Combined image version (Debian)
 ARG OS_VERSION=bookworm
 
 # Jellyfin FFMPEG package
@@ -16,12 +18,21 @@ ARG NEO_VER=25.13.33276.16
 ARG IGC1_LEGACY_VER=1.0.17537.20
 ARG NEO_LEGACY_VER=24.35.30872.22
 
-# Architecture arguments with defaults for amd64
-ARG PACKAGE_ARCH=amd64
-ARG DOTNET_ARCH=x64
-ARG QEMU_ARCH=x86_64
-ARG IMAGE_ARCH=amd64
-ARG TARGET_ARCH=amd64
+# https://github.com/tsukumijima/libmali-rockchip
+ARG MALI_PKG_VER=1.9-1_arm64
+ARG MALI_PKG_TAG=v1.9-1-2131373
+ARG MALI_PKG_CFG=valhall-g610-g24p0-gbm
+
+# Debian architecture (amd64, arm64, armhf), set by build script
+ARG PACKAGE_ARCH
+# Dotnet architeture (x64, arm64, arm), set by build script
+ARG DOTNET_ARCH
+# QEMU architecture (x86_64, aarch64, arm), set by build script
+ARG QEMU_ARCH
+# Base Image architecture (amd64, arm64v8, arm32v7), set by build script
+ARG IMAGE_ARCH
+# Target platform architecture (amd64, arm64/v8, arm/v7), set by build script
+ARG TARGET_ARCH
 
 # Jellyfin version
 ARG JELLYFIN_VERSION
@@ -29,15 +40,15 @@ ARG JELLYFIN_VERSION
 #
 # Build the web artifacts
 #
-FROM node:${NODEJS_VERSION}-alpine AS web
+FROM node:${NODEJS_VERSION}-alpine as web
 
 ARG SOURCE_DIR=/src
 ARG ARTIFACT_DIR=/web
+
 ARG JELLYFIN_VERSION
 ENV JELLYFIN_VERSION=${JELLYFIN_VERSION}
 
-# Install dependencies in a single layer with cache mount
-RUN apk add --no-cache \
+RUN apk add \
     autoconf \
     g++ \
     make \
@@ -54,105 +65,41 @@ RUN apk add --no-cache \
  && git config --global --add safe.directory /jellyfin/jellyfin-web
 
 WORKDIR ${SOURCE_DIR}
-
-# Copy package files first for better caching
-COPY jellyfin-web/package*.json ./
-RUN npm ci --no-audit --unsafe-perm
-
-# Copy source and build
 COPY jellyfin-web .
-RUN npm run build:production \
+
+RUN npm ci --no-audit --unsafe-perm \
+ && npm run build:production \
  && mv dist ${ARTIFACT_DIR}
 
 #
 # Build the server artifacts
 #
-FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}-${OS_VERSION}-slim AS server
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}-${OS_VERSION}-slim as server
 
 ARG DOTNET_ARCH
+
 ARG SOURCE_DIR=/src
 ARG ARTIFACT_DIR=/server
+
 ARG CONFIG=Release
 ENV CONFIG=${CONFIG}
-ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 
 WORKDIR ${SOURCE_DIR}
-
-# Copy source and restore dependencies
 COPY jellyfin-server .
-RUN dotnet restore --runtime linux-${DOTNET_ARCH}
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 
-# Copy source and build
 RUN dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFIG} \
-    --output="${ARTIFACT_DIR}" --self-contained --no-restore \
+    --output="${ARTIFACT_DIR}" --self-contained \
     -p:DebugSymbols=false -p:DebugType=none
 
 #
-# Download latest plugin release (cached)
+# Build the final combined image
 #
-FROM alpine:latest AS plugin
+FROM multiarch/qemu-user-static:x86_64-${QEMU_ARCH} as qemu
+FROM --platform=linux/${TARGET_ARCH} ${IMAGE_ARCH}/debian:${OS_VERSION}-slim as combined
 
-# Install tools
-RUN apk add --no-cache curl jq unzip
-
-# Download and extract plugin
-RUN LATEST_RELEASE=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.tag_name') \
- && echo "Latest plugin version: $LATEST_RELEASE" \
- && echo "PLUGIN_VERSION=$LATEST_RELEASE" > /plugin_version \
- && curl -L "https://github.com/soultaco83/Jellyfin_requests_plugin/releases/download/${LATEST_RELEASE}/Jellyfin.Plugin.RequestsAddon.zip" -o /plugin.zip \
- && mkdir -p "/plugin/RequestsAddon_${LATEST_RELEASE}" \
- && unzip /plugin.zip -d "/plugin/RequestsAddon_${LATEST_RELEASE}/"
-
-#
-# Base runtime dependencies (cached layer)
-#
-FROM debian:bookworm-slim AS runtime-base
-
-ARG OS_VERSION=bookworm
-ARG PACKAGE_ARCH=amd64
-
-# Install base system dependencies
-RUN apt-get update \
- && apt-get upgrade -y \
- && apt-get install --no-install-recommends --no-install-suggests --yes \
-    ca-certificates \
-    gnupg \
-    curl \
-    apt-transport-https \
-    zip \
-    cron \
-    openssl \
-    locales \
-    libfontconfig1 \
-    libfreetype6 \
-    libjemalloc2 \
-    sqlite3 \
- && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen \
- && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
-
-#
-# FFMPEG and Jellyfin repo setup (separate layer for caching)
-#
-FROM runtime-base AS jellyfin-deps
-
-ARG FFMPEG_PACKAGE
-ARG PACKAGE_ARCH
 ARG OS_VERSION
-
-RUN curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key \
-  | gpg --dearmor -o /etc/apt/trusted.gpg.d/debian-jellyfin.gpg \
- && echo "deb [arch=${PACKAGE_ARCH}] https://repo.jellyfin.org/master/debian ${OS_VERSION} main" > /etc/apt/sources.list.d/jellyfin.list \
- && apt-get update \
- && apt-get install --no-install-recommends --no-install-suggests --yes \
-    ${FFMPEG_PACKAGE} \
- && apt-get remove gnupg apt-transport-https --yes \
- && apt-get autoremove --yes \
- && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
-
-#
-# Intel OpenCL dependencies (separate cached layer)
-#
-FROM jellyfin-deps AS intel-deps
+ARG FFMPEG_PACKAGE
 
 ARG GMMLIB_VER
 ARG IGC2_VER
@@ -161,36 +108,21 @@ ARG NEO_VER
 ARG IGC1_LEGACY_VER
 ARG NEO_LEGACY_VER
 
-# Intel OpenCL runtime for amd64 with cache
-RUN mkdir -p /intel-compute-runtime && cd /intel-compute-runtime \
- && curl -L --parallel --parallel-immediate --parallel-max 7 \
-    -O https://github.com/intel/compute-runtime/releases/download/${NEO_VER}/libigdgmm12_${GMMLIB_VER}_amd64.deb \
-    -O https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC2_VER}/intel-igc-core-2_${IGC2_VER}+${IGC2_BUILD}_amd64.deb \
-    -O https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC2_VER}/intel-igc-opencl-2_${IGC2_VER}+${IGC2_BUILD}_amd64.deb \
-    -O https://github.com/intel/compute-runtime/releases/download/${NEO_VER}/intel-opencl-icd_${NEO_VER}_amd64.deb \
-    -O https://github.com/intel/intel-graphics-compiler/releases/download/igc-${IGC1_LEGACY_VER}/intel-igc-core_${IGC1_LEGACY_VER}_amd64.deb \
-    -O https://github.com/intel/intel-graphics-compiler/releases/download/igc-${IGC1_LEGACY_VER}/intel-igc-opencl_${IGC1_LEGACY_VER}_amd64.deb \
-    -O https://github.com/intel/compute-runtime/releases/download/${NEO_LEGACY_VER}/intel-opencl-icd-legacy1_${NEO_LEGACY_VER}_amd64.deb \
- && apt-get install --no-install-recommends --no-install-suggests -f -y ./*.deb \
- && cd .. && rm -rf /intel-compute-runtime \
- && apt-get clean autoclean --yes \
- && apt-get autoremove --yes \
- && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
+ARG MALI_PKG_VER
+ARG MALI_PKG_TAG
+ARG MALI_PKG_CFG
 
-#
-# Build the final combined image
-#
-FROM intel-deps AS combined
+ARG PACKAGE_ARCH
+ARG DOTNET_ARCH
+ARG QEMU_ARCH
 
-ARG DOTNET_ARCH=x64
-ARG PACKAGE_ARCH=amd64
-
-# Note: QEMU not needed for amd64 -> amd64 builds
+# Copy the QEMU runtime
+COPY --from=qemu /usr/bin/* /usr/bin
 
 # Set the health URL
 ENV HEALTHCHECK_URL=http://localhost:8096/health
 
-# Default environment variables
+# Default environment variables for the Jellyfin invocation
 ENV DEBIAN_FRONTEND="noninteractive" \
     LC_ALL="en_US.UTF-8" \
     LANG="en_US.UTF-8" \
@@ -201,46 +133,159 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     JELLYFIN_LOG_DIR="/config/log" \
     JELLYFIN_WEB_DIR="/jellyfin/jellyfin-web" \
     JELLYFIN_FFMPEG="/usr/lib/jellyfin-ffmpeg/ffmpeg" \
-    JELLYFIN_PLUGIN_PATH="/usr/lib/jellyfin/plugins:${JELLYFIN_DATA_DIR}/plugins" \
-    XDG_CACHE_HOME=${JELLYFIN_CACHE_DIR} \
-    MALLOC_TRIM_THRESHOLD_=131072 \
-    NVIDIA_VISIBLE_DEVICES="all" \
-    NVIDIA_DRIVER_CAPABILITIES="compute,video,utility"
+    JELLYFIN_PLUGIN_PATH="/usr/lib/jellyfin/plugins:${JELLYFIN_DATA_DIR}/plugins"
+    
+# required for fontconfig cache
+ENV XDG_CACHE_HOME=${JELLYFIN_CACHE_DIR}
 
-# Setup jemalloc for amd64
+# https://github.com/dlemstra/Magick.NET/issues/707#issuecomment-785351620
+ENV MALLOC_TRIM_THRESHOLD_=131072
+
+# https://github.com/NVIDIA/nvidia-docker/wiki/Installation-(Native-GPU-Support)
+ENV NVIDIA_VISIBLE_DEVICES="all"
+ENV NVIDIA_DRIVER_CAPABILITIES="compute,video,utility"
+
+# Install dependencies:
+RUN apt-get update \
+ && apt-get upgrade -y \
+ && apt-get install --no-install-recommends --no-install-suggests --yes \
+    ca-certificates \
+    gnupg \
+    curl \
+    apt-transport-https \
+    zip \
+    cron \
+ && curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key \
+  | gpg --dearmor -o /etc/apt/trusted.gpg.d/debian-jellyfin.gpg \
+ && echo "deb [arch=${PACKAGE_ARCH}] https://repo.jellyfin.org/master/debian ${OS_VERSION} main" > /etc/apt/sources.list.d/jellyfin.list \
+ && apt-get update \
+ && apt-get install --no-install-recommends --no-install-suggests --yes \
+    ${FFMPEG_PACKAGE} \
+    openssl \
+    locales \
+    libfontconfig1 \
+    libfreetype6 \
+    libjemalloc2 \
+ && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen \
+ && apt-get remove gnupg apt-transport-https --yes \
+ && apt-get clean autoclean --yes \
+ && apt-get autoremove --yes \
+ && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
+
+# Intel OpenCL Tone mapping dependencies:
+RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
+    mkdir intel-compute-runtime \
+ && cd intel-compute-runtime \
+ && curl -LO https://github.com/intel/compute-runtime/releases/download/${NEO_VER}/libigdgmm12_${GMMLIB_VER}_amd64.deb \
+         -LO https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC2_VER}/intel-igc-core-2_${IGC2_VER}+${IGC2_BUILD}_amd64.deb \
+         -LO https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC2_VER}/intel-igc-opencl-2_${IGC2_VER}+${IGC2_BUILD}_amd64.deb \
+         -LO https://github.com/intel/compute-runtime/releases/download/${NEO_VER}/intel-opencl-icd_${NEO_VER}_amd64.deb \
+         -LO https://github.com/intel/intel-graphics-compiler/releases/download/igc-${IGC1_LEGACY_VER}/intel-igc-core_${IGC1_LEGACY_VER}_amd64.deb \
+         -LO https://github.com/intel/intel-graphics-compiler/releases/download/igc-${IGC1_LEGACY_VER}/intel-igc-opencl_${IGC1_LEGACY_VER}_amd64.deb \
+         -LO https://github.com/intel/compute-runtime/releases/download/${NEO_LEGACY_VER}/intel-opencl-icd-legacy1_${NEO_LEGACY_VER}_amd64.deb \
+ && apt-get install --no-install-recommends --no-install-suggests -f -y ./*.deb \
+ && cd .. \
+ && rm -rf intel-compute-runtime \
+ ; fi \
+ && apt-get clean autoclean --yes \
+ && apt-get autoremove --yes \
+ && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
+
+# Rockchip RK3588 libmali OpenCL dependencies:
+RUN if test "${PACKAGE_ARCH}" = "arm64"; then \
+    mkdir libmali-rockchip \
+ && cd libmali-rockchip \
+ && curl -LO https://github.com/tsukumijima/libmali-rockchip/releases/download/${MALI_PKG_TAG}/libmali-${MALI_PKG_CFG}_${MALI_PKG_VER}.deb \
+ && apt-get install --no-install-recommends --no-install-suggests -f -y ./*.deb \
+ && cd .. \
+ && rm -rf libmali-rockchip \
+ ; fi \
+ && apt-get clean autoclean --yes \
+ && apt-get autoremove --yes \
+ && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
+
+# Setup jemalloc: link the library to a path owned by us to handle arch specific library paths
 RUN mkdir -p /usr/lib/jellyfin \
- && if [ -f "/usr/lib/x86_64-linux-gnu/libjemalloc.so.2" ]; then \
-        ln -s /usr/lib/x86_64-linux-gnu/libjemalloc.so.2 /usr/lib/jellyfin/libjemalloc.so.2 \
-        && echo "jemalloc linked for amd64"; \
-    else \
-        echo "WARNING: jemalloc not found" >&2; \
-    fi
+  && JEMALLOC_LINKED=0 \
+  && if [ "${PACKAGE_ARCH}" = "amd64" ]; then \
+         if [ -f "/usr/lib/x86_64-linux-gnu/libjemalloc.so.2" ]; then \
+             ln -s /usr/lib/x86_64-linux-gnu/libjemalloc.so.2 /usr/lib/jellyfin/libjemalloc.so.2 && JEMALLOC_LINKED=1; \
+         fi; \
+     elif [ "${PACKAGE_ARCH}" = "arm64" ]; then \
+         if [ -f "/usr/lib/aarch64-linux-gnu/libjemalloc.so.2" ]; then \
+             ln -s /usr/lib/aarch64-linux-gnu/libjemalloc.so.2 /usr/lib/jellyfin/libjemalloc.so.2 && JEMALLOC_LINKED=1; \
+         fi; \
+     fi \
+  && if [ "$JEMALLOC_LINKED" -eq 1 ]; then \
+         echo "jemalloc library linked successfully for ${PACKAGE_ARCH}." ; \
+     else \
+         echo "WARNING: jemalloc library .so file not found for PACKAGE_ARCH ${PACKAGE_ARCH}. Either the arch is not supported or copy failed. LD_PRELOAD might not work as expected." >&2; \
+     fi
 
-# Set LD_PRELOAD only if jemalloc is available
+# Set LD_PRELOAD to use the linked jemalloc library
 ENV LD_PRELOAD=/usr/lib/jellyfin/libjemalloc.so.2
 
-# Create directories
 RUN mkdir -p ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR} \
  && chmod 777 ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR}
 
-# Copy artifacts from build stages
 COPY --from=server /server /jellyfin
 COPY --from=web /web /jellyfin/jellyfin-web
-COPY --from=plugin /plugin /jellyfin/plugins
-COPY --from=plugin /plugin_version /etc/environment
 
-# Set permissions
-RUN chmod 777 -R ${JELLYFIN_WEB_DIR} \
- && chmod -R 755 /jellyfin/plugins
+RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
+
+# Copy the plugin files from the submodule
+COPY jellyfin-requests /tmp/jellyfin-requests
+
+# Install dependencies for plugin and JSON parsing
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    wget \
+    apt-transport-https \
+    software-properties-common && \
+    wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
+    dpkg -i packages-microsoft-prod.deb && \
+    rm packages-microsoft-prod.deb && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    dotnet-sdk-8.0 \
+    jq \
+    net-tools \
+    file \
+    lsof \
+    strace \
+    sqlite3	&& \
+    rm -rf /var/lib/apt/lists/*
+
+# Download and extract plugin
+RUN LATEST_RELEASE=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.tag_name') \
+ && echo "Latest plugin version: $LATEST_RELEASE" \
+ && echo "PLUGIN_VERSION=$LATEST_RELEASE" > /plugin_version \
+ && curl -L "https://github.com/soultaco83/Jellyfin_requests_plugin/releases/download/${LATEST_RELEASE}/Jellyfin.Plugin.RequestsAddon.zip" -o /plugin.zip \
+ && mkdir -p "/plugin/RequestsAddon_${LATEST_RELEASE}" \
+ && unzip /plugin.zip -d "/plugin/RequestsAddon_${LATEST_RELEASE}/"
 
 # Copy the entrypoint script
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Verify plugin installation
-RUN echo "Plugin setup verification:" \
- && ls -la /jellyfin/plugins \
- && cat /etc/environment
+# Cleanup
+RUN apt-get remove -y dotnet-sdk-8.0 jq && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/jellyfin-requests && \
+    rm -rf /jellyfin/plugins/* && \
+    mkdir -p /jellyfin/plugins && \
+    cp -R /preserved_plugins/* /jellyfin/plugins/ && \
+    rm -rf /preserved_plugins
+
+# Verify plugin files after cleanup
+RUN echo "Contents of /jellyfin/plugins after cleanup:" && \
+    ls -R /jellyfin/plugins && \
+    echo "All DLL files in /jellyfin/plugins after cleanup:" && \
+    find /jellyfin/plugins -name "*.dll"
+
+# Set permissions for plugin directory
+RUN chmod -R 755 /jellyfin/plugins
 
 ARG JELLYFIN_VERSION
 LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-packaging"
@@ -254,6 +299,5 @@ EXPOSE 8096
 VOLUME ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR}
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["/jellyfin/jellyfin"]
-
 HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
      CMD curl --noproxy 'localhost' -Lk -fsS "${HEALTHCHECK_URL}" || exit 1
