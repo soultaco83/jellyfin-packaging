@@ -147,6 +147,7 @@ RUN apt-get update \
     curl \
     apt-transport-https \
     zip \
+    unzip \
     cron \
  && curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key \
   | gpg --dearmor -o /etc/apt/trusted.gpg.d/debian-jellyfin.gpg \
