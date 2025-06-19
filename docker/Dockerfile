@@ -247,13 +247,14 @@ RUN apt-get update && \
     sqlite3	&& \
     rm -rf /var/lib/apt/lists/*
 
-# Download and extract plugin
+# Download and extract plugin directly to /jellyfin/plugins
 RUN LATEST_RELEASE=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.tag_name') \
  && echo "Latest plugin version: $LATEST_RELEASE" \
  && echo "PLUGIN_VERSION=$LATEST_RELEASE" >> /etc/environment \
- && curl -L "https://github.com/soultaco83/Jellyfin_requests_plugin/releases/download/${LATEST_RELEASE}/Jellyfin.Plugin.RequestsAddon.zip" -o /plugin.zip \
- && mkdir -p "/plugin/RequestsAddon_${LATEST_RELEASE}" \
- && unzip /plugin.zip -d "/plugin/RequestsAddon_${LATEST_RELEASE}/"
+ && mkdir -p "/jellyfin/plugins/RequestsAddon_${LATEST_RELEASE}" \
+ && curl -L "https://github.com/soultaco83/Jellyfin_requests_plugin/releases/download/${LATEST_RELEASE}/Jellyfin.Plugin.RequestsAddon.zip" -o /tmp/plugin.zip \
+ && unzip /tmp/plugin.zip -d "/jellyfin/plugins/RequestsAddon_${LATEST_RELEASE}/" \
+ && rm /tmp/plugin.zip
 
 # Copy the entrypoint script
 COPY docker/docker-entrypoint.sh /usr/local/bin/
