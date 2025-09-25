@@ -3,7 +3,7 @@ ARG DOTNET_VERSION=8.0
 ARG NODEJS_VERSION=20
 
 # Combined image version (Debian)
-ARG OS_VERSION=bookworm
+ARG OS_VERSION=trixie
 
 # Jellyfin FFMPEG package
 ARG FFMPEG_PACKAGE=jellyfin-ffmpeg7
@@ -15,8 +15,8 @@ ARG IGC2_VER=2.10.8
 ARG IGC2_BUILD=18926
 ARG NEO_VER=25.13.33276.16
 # <= Gen11 graphics (legacy)
-ARG IGC1_LEGACY_VER=1.0.17537.20
-ARG NEO_LEGACY_VER=24.35.30872.22
+ARG IGC1_LEGACY_VER=1.0.17537.24
+ARG NEO_LEGACY_VER=24.35.30872.36
 
 # https://github.com/tsukumijima/libmali-rockchip
 ARG MALI_PKG_VER=1.9-1_arm64
@@ -27,6 +27,8 @@ ARG MALI_PKG_CFG=valhall-g610-g24p0-gbm
 ARG PACKAGE_ARCH
 # Dotnet architeture (x64, arm64, arm), set by build script
 ARG DOTNET_ARCH
+# QEMU architecture (x86_64, aarch64, arm), set by build script
+ARG QEMU_ARCH
 # Base Image architecture (amd64, arm64v8, arm32v7), set by build script
 ARG IMAGE_ARCH
 # Target platform architecture (amd64, arm64/v8, arm/v7), set by build script
@@ -38,7 +40,7 @@ ARG JELLYFIN_VERSION
 #
 # Build the web artifacts
 #
-FROM node:${NODEJS_VERSION}-alpine as web
+FROM node:${NODEJS_VERSION}-alpine AS web
 
 ARG SOURCE_DIR=/src
 ARG ARTIFACT_DIR=/web
@@ -72,7 +74,7 @@ RUN npm ci --no-audit --unsafe-perm \
 #
 # Build the server artifacts
 #
-FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}-${OS_VERSION}-slim as server
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}-${OS_VERSION}-slim AS server
 
 ARG DOTNET_ARCH
 
@@ -93,7 +95,8 @@ RUN dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFI
 #
 # Build the final combined image
 #
-FROM --platform=linux/${TARGET_ARCH} ${IMAGE_ARCH}/debian:${OS_VERSION}-slim as combined
+FROM multiarch/qemu-user-static:x86_64-${QEMU_ARCH} AS qemu
+FROM --platform=linux/${TARGET_ARCH} ${IMAGE_ARCH}/debian:${OS_VERSION}-slim AS combined
 
 ARG OS_VERSION
 ARG FFMPEG_PACKAGE
@@ -111,6 +114,10 @@ ARG MALI_PKG_CFG
 
 ARG PACKAGE_ARCH
 ARG DOTNET_ARCH
+ARG QEMU_ARCH
+
+# Copy the QEMU runtime
+COPY --from=qemu /usr/bin/* /usr/bin
 
 # Set the health URL
 ENV HEALTHCHECK_URL=http://localhost:8096/health
@@ -128,7 +135,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     JELLYFIN_FFMPEG="/usr/lib/jellyfin-ffmpeg/ffmpeg" \
     JELLYFIN_PLUGIN_PATH="/usr/lib/jellyfin/plugins:${JELLYFIN_DATA_DIR}/plugins"
     
-# required for fontconfig cache
+ required for fontconfig cache
 ENV XDG_CACHE_HOME=${JELLYFIN_CACHE_DIR}
 
 # https://github.com/dlemstra/Magick.NET/issues/707#issuecomment-785351620
