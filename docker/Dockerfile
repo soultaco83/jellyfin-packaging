@@ -3,7 +3,7 @@ ARG DOTNET_VERSION=8.0
 ARG NODEJS_VERSION=20
 
 # Combined image version (Debian)
-ARG OS_VERSION=trixie
+ARG OS_VERSION=bookworm
 
 # Jellyfin FFMPEG package
 ARG FFMPEG_PACKAGE=jellyfin-ffmpeg7
