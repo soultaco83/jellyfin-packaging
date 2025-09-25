@@ -135,7 +135,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     JELLYFIN_FFMPEG="/usr/lib/jellyfin-ffmpeg/ffmpeg" \
     JELLYFIN_PLUGIN_PATH="/usr/lib/jellyfin/plugins:${JELLYFIN_DATA_DIR}/plugins"
     
- required for fontconfig cache
+# required for fontconfig cache
 ENV XDG_CACHE_HOME=${JELLYFIN_CACHE_DIR}
 
 # https://github.com/dlemstra/Magick.NET/issues/707#issuecomment-785351620
