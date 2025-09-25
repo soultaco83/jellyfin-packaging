@@ -137,6 +137,7 @@ jobs:
         continue-on-error: true
         run: |
           sudo --preserve-env ./build.py ${{ env.JELLYFIN_VERSION }} docker amd64 --local
+          sudo chown --recursive $USER out/debian
           
       - name: "Debug: List Docker images"
         run: docker images
