@@ -1,17 +1,7 @@
 ---
-# Build definitions for `build.py`
+# Build definitions for `build.py` - Customized for Docker AMD64 only
 
 # Upstream Framework versions
-# This section defines target commits after which a particular framework is required.
-# This is used by build.py to automatically determine which framework version to use
-# within the build containers based on whatever HEAD the project is at (from checkout.py).
-# Target commits should be a merge commit!
-# Target commits should be in order from oldest to newest!
-# HOW THIS WORKS:
-#   For each submodule, and then for each upstream framework version ARG to Docker...
-#   Provide a commit hash as a key, and a version as a value...
-#   If the given commit is in the commit tree of the current HEAD of the repo...
-#   Use the given version. Otherwise use the default.
 frameworks:
   jellyfin-web:
     NODEJS_VERSION:
@@ -21,7 +11,7 @@ frameworks:
       6d1abf67c36379f0b061095619147a3691841e21: 8.0  # Default
       ceb850c77052c465af8422dcf152f1d1d1530457: 9.0
 
-# Docker images
+# Docker images - AMD64 only
 docker:
   build_function: build_docker
   archmaps:
@@ -32,9 +22,10 @@ docker:
       QEMU_ARCH: x86_64
       TARGET_ARCH: amd64
   dockerfile: docker/Dockerfile
-  imagename: jellyfin/jellyfin
+  # Changed to your custom Docker Hub repository
+  imagename: soultaco83/jellyfin_with_request
 
-# Nuget packages
+# Nuget packages (keeping for compatibility but you can remove if not needed)
 nuget:
   build_function: build_nuget
   projects:
