@@ -449,6 +449,7 @@ def build_docker(
         DOTNET_ARCH = configurations["docker"]["archmaps"][_build_arch]["DOTNET_ARCH"]
         IMAGE_ARCH = configurations["docker"]["archmaps"][_build_arch]["IMAGE_ARCH"]
         TARGET_ARCH = configurations["docker"]["archmaps"][_build_arch]["TARGET_ARCH"]
+        QEMU_ARCH = configurations["docker"]["archmaps"][_build_arch]["QEMU_ARCH"]
 
         # Use a unique docker image name for consistency
         if is_stable or is_preview:
@@ -471,6 +472,7 @@ def build_docker(
         build_args.append(f"--build-arg DOTNET_ARCH={DOTNET_ARCH}")
         build_args.append(f"--build-arg IMAGE_ARCH={IMAGE_ARCH}")
         build_args.append(f"--build-arg TARGET_ARCH={TARGET_ARCH}")
+        build_args.append(f"--build-arg QEMU_ARCH={QEMU_ARCH}")
         build_args.append(f"--build-arg JELLYFIN_VERSION={jellyfin_version}")
         build_args.append(f"--build-arg CONFIG={'Debug' if debug else 'Release'}")
 
