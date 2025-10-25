@@ -1,4 +1,4 @@
-name: "Dev-- Build Docker"
+name: "Prod-- Build Docker"
 
 on:
   workflow_dispatch:
