@@ -262,14 +262,34 @@ RUN apt-get update && \
     sqlite3	&& \
     rm -rf /var/lib/apt/lists/*
 
-# Download and extract plugin directly to /jellyfin/plugins
-RUN LATEST_RELEASE=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.tag_name') \
- && echo "Latest plugin version: $LATEST_RELEASE" \
- && echo "PLUGIN_VERSION=$LATEST_RELEASE" >> /etc/environment \
- && mkdir -p "/jellyfin/plugins/RequestsAddon_${LATEST_RELEASE}" \
- && curl -L "https://github.com/soultaco83/Jellyfin_requests_plugin/releases/download/${LATEST_RELEASE}/Jellyfin.Plugin.RequestsAddon.zip" -o /tmp/plugin.zip \
- && unzip /tmp/plugin.zip -d "/jellyfin/plugins/RequestsAddon_${LATEST_RELEASE}/" \
- && rm /tmp/plugin.zip
+RUN echo "Installing Paradox's CustomTabs, Paradox's File Transformation, n00bcodr Jellyfin Enhanced" \
+ && mkdir -p /jellyfin/plugins \
+ # Custom Tabs Plugin
+ && CUSTOMTABS_VERSION=$(curl -s https://api.github.com/repos/IAmParadox27/jellyfin-plugin-custom-tabs/releases/latest | jq -r '.tag_name') \
+ && echo "CustomTabs version: $CUSTOMTABS_VERSION" \
+ && mkdir -p "/jellyfin/plugins/CustomTabs_${CUSTOMTABS_VERSION}" \
+ && curl -L "https://github.com/IAmParadox27/jellyfin-plugin-custom-tabs/releases/download/${CUSTOMTABS_VERSION}/custom-tabs.zip" -o /tmp/customtabs.zip \
+ && unzip /tmp/customtabs.zip -d "/jellyfin/plugins/CustomTabs_${CUSTOMTABS_VERSION}/" \
+ && rm /tmp/customtabs.zip \
+ # File Transformation Plugin  
+ && FILETRANS_VERSION=$(curl -s https://api.github.com/repos/IAmParadox27/jellyfin-plugin-file-transformation/releases/latest | jq -r '.tag_name') \
+ && echo "FileTransformation version: $FILETRANS_VERSION" \
+ && mkdir -p "/jellyfin/plugins/FileTransformation_${FILETRANS_VERSION}" \
+ && curl -L "https://github.com/IAmParadox27/jellyfin-plugin-file-transformation/releases/download/${FILETRANS_VERSION}/file-transformation.zip" -o /tmp/filetrans.zip \
+ && unzip /tmp/filetrans.zip -d "/jellyfin/plugins/FileTransformation_${FILETRANS_VERSION}/" \
+ && rm /tmp/filetrans.zip \
+ # Jellyfin Enhanced Plugin
+ && ENHANCED_VERSION=$(curl -s https://api.github.com/repos/n00bcodr/jellyfin-enhanced/releases/latest | jq -r '.tag_name') \
+ && echo "Enhanced version: $ENHANCED_VERSION" \
+ && mkdir -p "/jellyfin/plugins/Enhanced_${ENHANCED_VERSION}" \
+ && curl -L "https://github.com/n00bcodr/jellyfin-enhanced/releases/download/${ENHANCED_VERSION}/jellyfin-enhanced.zip" -o /tmp/enhanced.zip \
+ && unzip /tmp/enhanced.zip -d "/jellyfin/plugins/Enhanced_${ENHANCED_VERSION}/" \
+ && rm /tmp/enhanced.zip \
+ # Store versions in environment
+ && echo "REQUESTS_VERSION=$REQUESTS_VERSION" >> /etc/environment \
+ && echo "CUSTOMTABS_VERSION=$CUSTOMTABS_VERSION" >> /etc/environment \
+ && echo "FILETRANS_VERSION=$FILETRANS_VERSION" >> /etc/environment \
+ && echo "ENHANCED_VERSION=$ENHANCED_VERSION" >> /etc/environment
 
 # Copy the entrypoint script
 COPY docker/docker-entrypoint.sh /usr/local/bin/
