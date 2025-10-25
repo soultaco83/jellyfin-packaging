@@ -254,8 +254,6 @@ RUN apt-get update && \
     rm packages-microsoft-prod.deb && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-    dotnet-sdk-8.0 \
-    jq \
     net-tools \
     file \
     lsof \
@@ -263,30 +261,15 @@ RUN apt-get update && \
     sqlite3	&& \
     rm -rf /var/lib/apt/lists/*
 
-# Download and extract plugin directly to /jellyfin/plugins
-RUN LATEST_RELEASE=$(curl -s https://api.github.com/repos/soultaco83/Jellyfin_requests_plugin/releases/latest | jq -r '.tag_name') \
- && echo "Latest plugin version: $LATEST_RELEASE" \
- && echo "PLUGIN_VERSION=$LATEST_RELEASE" >> /etc/environment \
- && mkdir -p "/jellyfin/plugins/RequestsAddon_${LATEST_RELEASE}" \
- && curl -L "https://github.com/soultaco83/Jellyfin_requests_plugin/releases/download/${LATEST_RELEASE}/Jellyfin.Plugin.RequestsAddon.zip" -o /tmp/plugin.zip \
- && unzip /tmp/plugin.zip -d "/jellyfin/plugins/RequestsAddon_${LATEST_RELEASE}/" \
- && rm /tmp/plugin.zip
-
 # Copy the entrypoint script
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Cleanup build dependencies
-RUN apt-get remove -y dotnet-sdk-8.0 jq wget software-properties-common && \
+RUN apt-get remove -y wget software-properties-common && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-
-# Verify plugin installation
-RUN echo "Contents of /jellyfin/plugins after installation:" && \
-    ls -R /jellyfin/plugins && \
-    echo "All DLL files in /jellyfin/plugins:" && \
-    find /jellyfin/plugins -name "*.dll"
 
 ARG JELLYFIN_VERSION
 LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-packaging"
