@@ -247,8 +247,7 @@ RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
-    apt-transport-https \
-    software-properties-common && \
+    apt-transport-https && \
     wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
     dpkg -i packages-microsoft-prod.deb && \
     rm packages-microsoft-prod.deb && \
@@ -266,7 +265,7 @@ COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Cleanup build dependencies
-RUN apt-get remove -y wget software-properties-common && \
+RUN apt-get remove -y wget && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
