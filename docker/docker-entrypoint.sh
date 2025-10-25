@@ -184,10 +184,10 @@ update_plugin_repositories() {
         sed -i 's|</ServerConfiguration>|  <PluginRepositories>\n  </PluginRepositories>\n</ServerConfiguration>|' "$system_xml"
     fi
 
-    # Add Enhanced repository if not present
-    if ! grep -q "n00bcodr/jellyfin-enhanced" "$system_xml"; then
+    # Add Enhanced repository if not present (updated URL for 10.11)
+    if ! grep -q "n00bcodr/jellyfin-plugins" "$system_xml"; then
         echo "$(date '+%H:%M:%S') - Adding Enhanced plugin repository"
-        sed -i 's|  </PluginRepositories>|    <RepositoryInfo>\n      <Name>n00bcodr jellyfin-enhanced</Name>\n      <Url>https://raw.githubusercontent.com/n00bcodr/jellyfin-enhanced/main/manifest.json</Url>\n      <Enabled>true</Enabled>\n    </RepositoryInfo>\n  </PluginRepositories>|' "$system_xml"
+        sed -i 's|  </PluginRepositories>|    <RepositoryInfo>\n      <Name>n00bcodr repo</Name>\n      <Url>https://raw.githubusercontent.com/n00bcodr/jellyfin-plugins/main/10.11/manifest.json</Url>\n      <Enabled>true</Enabled>\n    </RepositoryInfo>\n  </PluginRepositories>|' "$system_xml"
     fi
 
     # Add IAmParadox repository if not present
