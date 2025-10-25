@@ -1,11 +1,14 @@
 [submodule "jellyfin-server"]
 	path = jellyfin-server
 	url = https://github.com/soultaco83/jellyfin-server-unstable
+	branch = test
 
 [submodule "jellyfin-web"]
 	path = jellyfin-web
 	url = https://github.com/soultaco83/jellyfin-web-unstable
+	branch = test
 
 [submodule "jellyfin-requests"]
 	path = jellyfin-requests
 	url = https://github.com/soultaco83/jellyfin_plugin_requests
+	branch = master
