@@ -73,6 +73,41 @@ perform_config_backup() {
     fi
 }
 
+# Function to setup plugin (simplified since plugin is now pre-downloaded)
+setup_plugin() {
+    # Get plugin version from the build
+    local plugin_version
+    plugin_version=$(grep -oP 'PLUGIN_VERSION=\K.*' /etc/environment 2>/dev/null)
+
+    if [ -z "$plugin_version" ]; then
+        echo "$(date '+%H:%M:%S') - Error: Could not determine plugin version"
+        return 1
+    fi
+
+    echo "$(date '+%H:%M:%S') - Setting up RequestsAddon plugin version: $plugin_version"
+
+    # Clean existing installations
+    rm -rf /config/plugins/RequestsAddon_* 2>/dev/null || true
+
+    # Set up paths
+    local source_dir="/jellyfin/plugins/RequestsAddon_${plugin_version}"
+    local target_dir="/config/plugins/RequestsAddon_${plugin_version}"
+
+    # Check if the pre-built plugin exists
+    if [ ! -d "$source_dir" ] || [ ! -f "${source_dir}/Jellyfin.Plugin.RequestsAddon.dll" ]; then
+        echo "$(date '+%H:%M:%S') - Error: Plugin directory or DLL not found at $source_dir"
+        return 1
+    fi
+
+    # Install plugin by copying the entire directory
+    mkdir -p "${target_dir}"
+    cp -r "${source_dir}"/* "${target_dir}/"
+    chmod -R 644 "${target_dir}"
+    
+    echo "$(date '+%H:%M:%S') - RequestsAddon plugin installed successfully"
+    return 0
+}
+
 # Function to apply temp fixes
 apply_temp_fixes() {
     # Temp fix for webos
@@ -120,6 +155,11 @@ echo "$(date '+%H:%M:%S') - Starting parallel setup operations..."
     apply_temp_fixes
     echo "$(date '+%H:%M:%S') - WebOS temp fix applied"
 }
+
+# Setup plugin (this is critical and must complete before Jellyfin starts)
+if ! setup_plugin; then
+    echo "$(date '+%H:%M:%S') - CRITICAL: Plugin setup failed. Container will continue but plugin may not work."
+fi
 
 # Perform backups if needed (these MUST complete before Jellyfin starts)
 if [ "$backup_needed" = true ]; then
