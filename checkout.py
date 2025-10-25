@@ -40,28 +40,44 @@ for submodule in this_repo.submodules:
     submodules[submodule.name] = submodule.module()
 
 # Validate that the provided tag is valid; if not, fall back to "master"
-if target_release != "master":
-    if (
-        target_release not in submodules["jellyfin-server"].tags
-        or target_release not in submodules["jellyfin-web"].tags
-    ):
-        print(
-            f"WARNING: Provided tag {target_release} is not a valid tag for both jellyfin-server and jellyfin-web; using master instead"
-        )
-        target_release = "master"
+# Skip validation for "test" branch as it's a branch, not a tag
+if target_release != "master" and target_release != "test":
+    # Check if it's a valid tag for server and web
+    if "jellyfin-server" in submodules and "jellyfin-web" in submodules:
+        if (
+            target_release not in submodules["jellyfin-server"].tags
+            or target_release not in submodules["jellyfin-web"].tags
+        ):
+            print(
+                f"WARNING: Provided tag {target_release} is not a valid tag for both jellyfin-server and jellyfin-web; using master instead"
+            )
+            target_release = "master"
 
 for submodule in submodules.keys():
-    if target_release == "master" or submodule == 'jellyfin-server-windows':
+    # Determine the target head based on the release type and submodule
+    if target_release == "master":
+        target_head = "origin/master"
+    elif target_release == "test":
+        # Use test branch for test builds (all submodules)
+        target_head = "origin/test"
+    elif submodule == 'jellyfin-server-windows':
+        # Windows server always uses master
         target_head = "origin/master"
     else:
+        # For versioned releases (tags)
         target_head = f"refs/tags/{target_release}"
+    
     # Checkout the given head and reset the working tree
-    submodules[submodule].head.reference = target_head
-    submodules[submodule].head.reset(index=True, working_tree=True)
-    sha = submodules[submodule].head.object.hexsha
-    author = submodules[submodule].head.object.author.name
-    summary = submodules[submodule].head.object.summary
-    date = datetime.fromtimestamp(submodules[submodule].head.object.committed_date)
-    print(f"Submodule {submodule} now at {target_head} (\"{summary}\" commit {sha} by {author} @ {date})")
+    try:
+        submodules[submodule].head.reference = target_head
+        submodules[submodule].head.reset(index=True, working_tree=True)
+        sha = submodules[submodule].head.object.hexsha
+        author = submodules[submodule].head.object.author.name
+        summary = submodules[submodule].head.object.summary
+        date = datetime.fromtimestamp(submodules[submodule].head.object.committed_date)
+        print(f"Submodule {submodule} now at {target_head} (\"{summary}\" commit {sha} by {author} @ {date})")
+    except Exception as e:
+        print(f"Warning: Could not checkout {target_head} for {submodule}: {e}")
+        print(f"Submodule {submodule} will remain at current HEAD")
 
 print(f"Successfully checked out submodules to ref {target_release}")
