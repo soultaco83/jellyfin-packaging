@@ -77,6 +77,9 @@ perform_config_backup() {
 setup_plugins() {
     echo "$(date '+%H:%M:%S') - Checking pre-installed plugins..."
     
+    # Ensure plugin directory exists
+    mkdir -p /config/plugins
+    
     # Get plugin versions from the build
     local customtabs_version=$(grep -oP 'CUSTOMTABS_VERSION=\K.*' /etc/environment 2>/dev/null)
     local filetrans_version=$(grep -oP 'FILETRANS_VERSION=\K.*' /etc/environment 2>/dev/null)
@@ -99,7 +102,7 @@ setup_plugins() {
             if [ -d "$source_dir" ]; then
                 mkdir -p "${target_dir}"
                 cp -r "${source_dir}"/* "${target_dir}/"
-                chmod -R 644 "${target_dir}"
+                chmod -R 755 "${target_dir}"
                 echo "$(date '+%H:%M:%S') - CustomTabs plugin installed successfully"
             else
                 echo "$(date '+%H:%M:%S') - Warning: CustomTabs plugin not found at $source_dir"
@@ -123,7 +126,7 @@ setup_plugins() {
             if [ -d "$source_dir" ]; then
                 mkdir -p "${target_dir}"
                 cp -r "${source_dir}"/* "${target_dir}/"
-                chmod -R 644 "${target_dir}"
+                chmod -R 755 "${target_dir}"
                 echo "$(date '+%H:%M:%S') - FileTransformation plugin installed successfully"
             else
                 echo "$(date '+%H:%M:%S') - Warning: FileTransformation plugin not found at $source_dir"
@@ -147,7 +150,7 @@ setup_plugins() {
             if [ -d "$source_dir" ]; then
                 mkdir -p "${target_dir}"
                 cp -r "${source_dir}"/* "${target_dir}/"
-                chmod -R 644 "${target_dir}"
+                chmod -R 755 "${target_dir}"
                 echo "$(date '+%H:%M:%S') - Enhanced plugin installed successfully"
             else
                 echo "$(date '+%H:%M:%S') - Warning: Enhanced plugin not found at $source_dir"
@@ -187,13 +190,13 @@ update_plugin_repositories() {
     # Add Enhanced repository if not present (updated URL for 10.11)
     if ! grep -q "n00bcodr/jellyfin-plugins" "$system_xml"; then
         echo "$(date '+%H:%M:%S') - Adding Enhanced plugin repository"
-        sed -i 's|  </PluginRepositories>|    <RepositoryInfo>\n      <Name>n00bcodr repo</Name>\n      <Url>https://raw.githubusercontent.com/n00bcodr/jellyfin-plugins/main/10.11/manifest.json</Url>\n      <Enabled>true</Enabled>\n    </RepositoryInfo>\n  </PluginRepositories>|' "$system_xml"
+        sed -i 's|  </PluginRepositories>|    <RepositoryInfo>\n      <n>n00bcodr repo</n>\n      <Url>https://raw.githubusercontent.com/n00bcodr/jellyfin-plugins/main/10.11/manifest.json</Url>\n      <Enabled>true</Enabled>\n    </RepositoryInfo>\n  </PluginRepositories>|' "$system_xml"
     fi
 
     # Add IAmParadox repository if not present
     if ! grep -q "iamparadox.dev" "$system_xml"; then
         echo "$(date '+%H:%M:%S') - Adding IAmParadox plugin repository"
-        sed -i 's|  </PluginRepositories>|    <RepositoryInfo>\n      <Name>iamparadox repo</Name>\n      <Url>https://www.iamparadox.dev/jellyfin/plugins/manifest.json</Url>\n      <Enabled>true</Enabled>\n    </RepositoryInfo>\n  </PluginRepositories>|' "$system_xml"
+        sed -i 's|  </PluginRepositories>|    <RepositoryInfo>\n      <n>iamparadox repo</n>\n      <Url>https://www.iamparadox.dev/jellyfin/plugins/manifest.json</Url>\n      <Enabled>true</Enabled>\n    </RepositoryInfo>\n  </PluginRepositories>|' "$system_xml"
     fi
 
     echo "$(date '+%H:%M:%S') - Plugin repositories configured"
@@ -244,13 +247,16 @@ echo "$(date '+%H:%M:%S') - Starting parallel setup operations..."
 # Start all non-critical operations in background
 {
     apply_temp_fixes
-    echo "$(date '+%H:%M:%S') - WebOS temp fix applied"
-}
+    echo "$(date '+%H:%M:%S') - Temp fixes applied"
+} &
 
-# Setup plugin (this is critical and must complete before Jellyfin starts)
-if ! setup_plugin; then
-    echo "$(date '+%H:%M:%S') - CRITICAL: Plugin setup failed. Container will continue but plugin may not work."
+# Setup plugins (this is critical and must complete before Jellyfin starts)
+if ! setup_plugins; then
+    echo "$(date '+%H:%M:%S') - CRITICAL: Plugin setup failed. Container will continue but plugins may not work."
 fi
+
+# Update plugin repositories in system.xml
+update_plugin_repositories
 
 # Perform backups if needed (these MUST complete before Jellyfin starts)
 if [ "$backup_needed" = true ]; then
