@@ -1,6 +1,59 @@
 <h1 align="center">Jellyfin Packaging</h1>
 <h3 align="center">Part of Jellyfin: The Free Software Media System</h3>
 
+# Jellyfin with Pre-installed Plugins
+
+This Docker image includes Jellyfin with several pre-installed plugins for enhanced functionality.
+
+## Included Plugins
+
+This image comes with the following plugins pre-installed:
+
+1. **Custom Tabs** by IAmParadox27 - Add custom tabs to your Jellyfin interface
+   - Repository: https://github.com/IAmParadox27/jellyfin-plugin-custom-tabs
+   - License: GPL-3.0
+
+2. **File Transformation** by IAmParadox27 - Transform and manage files
+   - Repository: https://github.com/IAmParadox27/jellyfin-plugin-file-transformation
+   - License: GPL-3.0
+
+3. **Jellyfin Enhanced** by n00bcodr - Enhanced Jellyfin features
+   - Repository: https://github.com/n00bcodr/jellyfin-enhanced
+
+## Plugin Repositories
+
+The following plugin repositories are automatically configured:
+- Enhanced: `https://raw.githubusercontent.com/n00bcodr/jellyfin-enhanced/main/manifest.json`
+- IAmParadox: `https://www.iamparadox.dev/jellyfin/plugins/manifest.json`
+
+## Usage
+```bash
+docker run -d \
+  --name jellyfin \
+  -v /path/to/config:/config \
+  -v /path/to/cache:/cache \
+  -v /path/to/media:/media \
+  -p 8096:8096 \
+  soultaco83/jellyfin_with_request:latest
+```
+
+## Automatic Backups
+
+This image automatically creates backups of your database and configuration on:
+- First container start
+- Docker image updates
+
+Backups are stored in `/config/backups/` and the last 10 backups are retained.
+
+## License
+
+This Docker image includes plugins licensed under GPL-3.0. See individual plugin repositories for detailed license information.
+
+## Credits
+
+- Jellyfin Project: https://jellyfin.org
+- Plugin developers: IAmParadox27, n00bcodr
+
 ---
 
 <p align="center">
