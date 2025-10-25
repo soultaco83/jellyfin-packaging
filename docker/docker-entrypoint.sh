@@ -190,13 +190,13 @@ update_plugin_repositories() {
     # Add Enhanced repository if not present (updated URL for 10.11)
     if ! grep -q "n00bcodr/jellyfin-plugins" "$system_xml"; then
         echo "$(date '+%H:%M:%S') - Adding Enhanced plugin repository"
-        sed -i 's|  </PluginRepositories>|    <RepositoryInfo>\n      <n>n00bcodr repo</n>\n      <Url>https://raw.githubusercontent.com/n00bcodr/jellyfin-plugins/main/10.11/manifest.json</Url>\n      <Enabled>true</Enabled>\n    </RepositoryInfo>\n  </PluginRepositories>|' "$system_xml"
+        sed -i 's|  </PluginRepositories>|    <RepositoryInfo>\n      <Name>n00bcodr repo</Name>\n      <Url>https://raw.githubusercontent.com/n00bcodr/jellyfin-plugins/main/10.11/manifest.json</Url>\n      <Enabled>true</Enabled>\n    </RepositoryInfo>\n  </PluginRepositories>|' "$system_xml"
     fi
 
     # Add IAmParadox repository if not present
     if ! grep -q "iamparadox.dev" "$system_xml"; then
         echo "$(date '+%H:%M:%S') - Adding IAmParadox plugin repository"
-        sed -i 's|  </PluginRepositories>|    <RepositoryInfo>\n      <n>iamparadox repo</n>\n      <Url>https://www.iamparadox.dev/jellyfin/plugins/manifest.json</Url>\n      <Enabled>true</Enabled>\n    </RepositoryInfo>\n  </PluginRepositories>|' "$system_xml"
+        sed -i 's|  </PluginRepositories>|    <RepositoryInfo>\n      <Name>iamparadox repo</Name>\n      <Url>https://www.iamparadox.dev/jellyfin/plugins/manifest.json</Url>\n      <Enabled>true</Enabled>\n    </RepositoryInfo>\n  </PluginRepositories>|' "$system_xml"
     fi
 
     echo "$(date '+%H:%M:%S') - Plugin repositories configured"
