@@ -270,14 +270,14 @@ RUN echo "Installing Paradox's CustomTabs, Paradox's File Transformation, n00bco
  && CUSTOMTABS_VERSION=$(curl -s https://api.github.com/repos/IAmParadox27/jellyfin-plugin-custom-tabs/releases/latest | jq -r '.tag_name') \
  && echo "CustomTabs version: $CUSTOMTABS_VERSION" \
  && mkdir -p "/jellyfin/plugins/CustomTabs_${CUSTOMTABS_VERSION}" \
- && curl -L "https://github.com/IAmParadox27/jellyfin-plugin-custom-tabs/releases/download/${CUSTOMTABS_VERSION}/Release-10.11.0.zip" -o /tmp/customtabs.zip \
+ && curl -L "https://github.com/IAmParadox27/jellyfin-plugin-custom-tabs/releases/download/${CUSTOMTABS_VERSION}/Release-10.11.1.zip" -o /tmp/customtabs.zip \
  && unzip /tmp/customtabs.zip -d "/jellyfin/plugins/CustomTabs_${CUSTOMTABS_VERSION}/" \
  && rm /tmp/customtabs.zip \
  # File Transformation Plugin  
  && FILETRANS_VERSION=$(curl -s https://api.github.com/repos/IAmParadox27/jellyfin-plugin-file-transformation/releases/latest | jq -r '.tag_name') \
  && echo "FileTransformation version: $FILETRANS_VERSION" \
  && mkdir -p "/jellyfin/plugins/FileTransformation_${FILETRANS_VERSION}" \
- && curl -L "https://github.com/IAmParadox27/jellyfin-plugin-file-transformation/releases/download/${FILETRANS_VERSION}/Release-10.11.0.zip" -o /tmp/filetrans.zip \
+ && curl -L "https://github.com/IAmParadox27/jellyfin-plugin-file-transformation/releases/download/${FILETRANS_VERSION}/Release-10.11.1.zip" -o /tmp/filetrans.zip \
  && unzip /tmp/filetrans.zip -d "/jellyfin/plugins/FileTransformation_${FILETRANS_VERSION}/" \
  && rm /tmp/filetrans.zip \
  # Jellyfin Enhanced Plugin
