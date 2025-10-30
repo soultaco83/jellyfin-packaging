@@ -273,12 +273,6 @@ RUN apt-get remove -y dotnet-sdk-8.0 jq wget && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Verify plugin installation
-RUN echo "Contents of /jellyfin/plugins after installation:" && \
-    ls -R /jellyfin/plugins && \
-    echo "All DLL files in /jellyfin/plugins:" && \
-    find /jellyfin/plugins -name "*.dll"
-
 ARG JELLYFIN_VERSION
 LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-packaging"
 LABEL "org.opencontainers.image.title"="Jellyfin with request"
