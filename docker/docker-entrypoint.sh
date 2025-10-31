@@ -73,42 +73,6 @@ perform_config_backup() {
     fi
 }
 
-# Function to compare version strings (returns 0 if v1 > v2, 1 if v1 <= v2)
-version_gt() {
-    local v1=$1
-    local v2=$2
-    
-    # Remove any leading 'v' if present
-    v1=${v1#v}
-    v2=${v2#v}
-    
-    # Split versions into arrays
-    IFS='.' read -ra V1 <<< "$v1"
-    IFS='.' read -ra V2 <<< "$v2"
-    
-    # Compare each segment
-    for i in "${!V1[@]}"; do
-        # If v2 has fewer segments, v1 is greater
-        if [ -z "${V2[$i]}" ]; then
-            return 0
-        fi
-        # Compare segments numerically
-        if [ "${V1[$i]}" -gt "${V2[$i]}" ]; then
-            return 0
-        elif [ "${V1[$i]}" -lt "${V2[$i]}" ]; then
-            return 1
-        fi
-    done
-    
-    # If v2 has more segments, v1 is not greater
-    if [ "${#V2[@]}" -gt "${#V1[@]}" ]; then
-        return 1
-    fi
-    
-    # Versions are equal
-    return 1
-}
-
 # Function to apply temp fixes
 apply_temp_fixes() {
     # Temp fix for webos
