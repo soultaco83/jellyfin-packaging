@@ -233,18 +233,16 @@ RUN mkdir -p /usr/lib/jellyfin \
          echo "WARNING: jemalloc library .so file not found for PACKAGE_ARCH ${PACKAGE_ARCH}. Either the arch is not supported or copy failed. LD_PRELOAD might not work as expected." >&2; \
      fi
 
-# Set LD_PRELOAD to use the linked jemalloc library
 ENV LD_PRELOAD=/usr/lib/jellyfin/libjemalloc.so.2
 
 RUN mkdir -p ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR} \
- && chmod 777 ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR}
+ && chmod 777 -R ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR}
 
 COPY --from=server /server /jellyfin
 COPY --from=web /web /jellyfin/jellyfin-web
 
 RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
 
-# Install dependencies for plugin and JSON parsing
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
@@ -263,46 +261,21 @@ RUN apt-get update && \
     sqlite3	&& \
     rm -rf /var/lib/apt/lists/*
 
-# Download and extract multiple plugins directly to /jellyfin/plugins
-RUN echo "Installing Paradox's CustomTabs, Paradox's File Transformation, n00bcodr Jellyfin Enhanced" \
- && mkdir -p /jellyfin/plugins \
- # Custom Tabs Plugin
- && CUSTOMTABS_VERSION=$(curl -s https://api.github.com/repos/IAmParadox27/jellyfin-plugin-custom-tabs/releases/latest | jq -r '.tag_name') \
- && echo "CustomTabs version: $CUSTOMTABS_VERSION" \
- && mkdir -p "/jellyfin/plugins/CustomTabs_${CUSTOMTABS_VERSION}" \
- && curl -L "https://github.com/IAmParadox27/jellyfin-plugin-custom-tabs/releases/download/${CUSTOMTABS_VERSION}/Release-10.11.2.zip" -o /tmp/customtabs.zip \
- && unzip /tmp/customtabs.zip -d "/jellyfin/plugins/CustomTabs_${CUSTOMTABS_VERSION}/" \
- && rm /tmp/customtabs.zip \
- # File Transformation Plugin  
- && FILETRANS_VERSION=$(curl -s https://api.github.com/repos/IAmParadox27/jellyfin-plugin-file-transformation/releases/latest | jq -r '.tag_name') \
- && echo "FileTransformation version: $FILETRANS_VERSION" \
- && mkdir -p "/jellyfin/plugins/FileTransformation_${FILETRANS_VERSION}" \
- && curl -L "https://github.com/IAmParadox27/jellyfin-plugin-file-transformation/releases/download/${FILETRANS_VERSION}/Release-10.11.2.zip" -o /tmp/filetrans.zip \
- && unzip /tmp/filetrans.zip -d "/jellyfin/plugins/FileTransformation_${FILETRANS_VERSION}/" \
- && rm /tmp/filetrans.zip \
- # Jellyfin Enhanced Plugin
- && ENHANCED_VERSION=$(curl -s https://api.github.com/repos/n00bcodr/jellyfin-enhanced/releases/latest | jq -r '.tag_name') \
- && echo "Enhanced version: $ENHANCED_VERSION" \
- && mkdir -p "/jellyfin/plugins/Enhanced_${ENHANCED_VERSION}" \
- && curl -L "https://github.com/n00bcodr/Jellyfin-Enhanced/releases/download/${ENHANCED_VERSION}/Jellyfin.Plugin.JellyfinEnhanced_10.11.0.zip" -o /tmp/enhanced.zip \
- && unzip /tmp/enhanced.zip -d "/jellyfin/plugins/Enhanced_${ENHANCED_VERSION}/" \
- && rm /tmp/enhanced.zip \
- # Store versions in environment
- && echo "CUSTOMTABS_VERSION=$CUSTOMTABS_VERSION" >> /etc/environment \
- && echo "FILETRANS_VERSION=$FILETRANS_VERSION" >> /etc/environment \
- && echo "ENHANCED_VERSION=$ENHANCED_VERSION" >> /etc/environment
 
-# Copy the entrypoint script
+COPY docker/download-plugins-manifest.sh /tmp/download-plugins.sh
+RUN chmod +x /tmp/download-plugins.sh
+
+RUN /tmp/download-plugins.sh "/jellyfin/plugins" && \
+    rm /tmp/download-plugins.sh
+
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Cleanup build dependencies
 RUN apt-get remove -y dotnet-sdk-8.0 jq wget && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Verify plugin installation
 RUN echo "Contents of /jellyfin/plugins after installation:" && \
     ls -R /jellyfin/plugins && \
     echo "All DLL files in /jellyfin/plugins:" && \
