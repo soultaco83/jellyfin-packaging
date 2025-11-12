@@ -92,6 +92,7 @@ RUN apt-get update \
     curl \
     ca-certificates \
     libicu76 \
+    python3 \
  && curl -fsSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel ${DOTNET_VERSION} --install-dir /usr/local/bin
 
 RUN dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFIG} \
