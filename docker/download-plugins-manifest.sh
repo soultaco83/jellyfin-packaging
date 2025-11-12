@@ -31,19 +31,20 @@ get_highest_version() {
     echo "  Searching manifest for plugin GUID: ${guid}"
     
     # Extract all versions for this plugin and sort by targetAbi (descending)
+    # Using a simpler sorting approach that's more compatible across jq versions
     local best_version=$(jq -r --arg guid "$guid" '
-        .[] | select(.guid == $guid) | 
-        .versions[] | 
+        [.[] | select(.guid == $guid) | .versions[] | 
         {
             version: .version,
             targetAbi: .targetAbi,
             sourceUrl: .sourceUrl,
             checksum: .checksum,
             timestamp: .timestamp
-        } | 
-        # Create a sortable version string (convert 10.11.2.0 to 010.011.002.000 for sorting)
-        . + {sortKey: (.targetAbi | split(".") | map(tonumber) | map(tostring | ("000" + .)[-3:]) | join("."))}
-    ' /tmp/manifest.json | jq -s 'sort_by(.sortKey) | reverse | .[0]')
+        }] | 
+        sort_by(.targetAbi | split(".") | map(tonumber)) | 
+        reverse | 
+        .[0]
+    ' /tmp/manifest.json)
     
     if [ -z "$best_version" ] || [ "$best_version" = "null" ]; then
         echo "  ✗ Plugin not found in manifest"
