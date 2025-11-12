@@ -262,11 +262,9 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 
-COPY docker/download-plugins-manifest.sh /tmp/download-plugins.sh
-RUN chmod +x /tmp/download-plugins.sh
-
-RUN /tmp/download-plugins.sh "/jellyfin/plugins" && \
-    rm /tmp/download-plugins.sh
+COPY docker/download-plugins-manifest.py /tmp/download-plugins.py
+RUN python3 /tmp/download-plugins.py "/jellyfin/plugins" && \
+    rm /tmp/download-plugins.py
 
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
