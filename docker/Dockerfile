@@ -258,6 +258,7 @@ RUN apt-get update && \
     net-tools \
     file \
     lsof \
+    python3 \
     strace \
     sqlite3	&& \
     rm -rf /var/lib/apt/lists/*
