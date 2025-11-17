@@ -73,6 +73,49 @@ perform_config_backup() {
     fi
 }
 
+# Function to perform database vacuum and reindex for optimization
+perform_db_vacuum() {
+    echo "$(date '+%H:%M:%S') - Starting database vacuum and reindex..."
+
+    local vacuum_success=true
+    local main_dbs=(
+        "/config/data/jellyfin.db"
+        "/config/data/library.db"
+    )
+
+    # Vacuum and reindex each main database file
+    for db_file in "${main_dbs[@]}"; do
+        if [ -f "$db_file" ]; then
+            local db_name=$(basename "$db_file")
+            echo "$(date '+%H:%M:%S') - Processing $db_name..."
+
+            # Perform VACUUM to reclaim space and defragment
+            if sqlite3 "$db_file" 'VACUUM;' 2>/dev/null; then
+                echo "$(date '+%H:%M:%S') - ✓ VACUUM completed for $db_name"
+            else
+                echo "$(date '+%H:%M:%S') - Warning: VACUUM failed for $db_name"
+                vacuum_success=false
+            fi
+
+            # Perform REINDEX to rebuild all indices
+            if sqlite3 "$db_file" 'REINDEX;' 2>/dev/null; then
+                echo "$(date '+%H:%M:%S') - ✓ REINDEX completed for $db_name"
+            else
+                echo "$(date '+%H:%M:%S') - Warning: REINDEX failed for $db_name"
+                vacuum_success=false
+            fi
+        else
+            echo "$(date '+%H:%M:%S') - Database file $db_file not found, skipping..."
+        fi
+    done
+
+    if [ "$vacuum_success" = true ]; then
+        echo "$(date '+%H:%M:%S') - Database optimization completed successfully"
+    else
+        echo "$(date '+%H:%M:%S') - Database optimization completed with warnings"
+    fi
+}
+
 # Function to compare version strings (returns 0 if v1 > v2, 1 if v1 <= v2)
 version_gt() {
     local v1=$1
@@ -368,10 +411,13 @@ if [ "$backup_needed" = true ]; then
     echo "$(date '+%H:%M:%S') - Performing critical backups..."
     perform_db_backup "$backup_reason"
     perform_config_backup
-    
+
     # Update build signature
     echo "$CURRENT_BUILD_TIME" > "$DOCKER_BUILD_FILE"
     echo "$(date '+%H:%M:%S') - Critical backups completed"
+
+    # Optimize databases after backup
+    perform_db_vacuum
 fi
 
 # Wait for all background operations to complete
