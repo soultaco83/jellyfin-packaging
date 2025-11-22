@@ -114,7 +114,7 @@ def install_plugin(manifest, plugin_name, guid, plugin_dir):
         var_name_map = {
             "FileTransformation": "FILETRANS_VERSION",
             "CustomTabs": "CUSTOMTABS_VERSION",
-            "Enhanced": "ENHANCED_VERSION".
+            "Enhanced": "ENHANCED_VERSION",
             "PluginPages": "PluginPages_VERSION"
         }
         var_name = var_name_map.get(plugin_name, f"{plugin_name.upper()}_VERSION")
