@@ -1,8 +1,6 @@
 name: "Test-- Build Docker"
 
 on:
-  schedule:
-    - cron: '0 9 * * 0'  # Sunday at 6am
   workflow_dispatch:
     inputs:
       version:
