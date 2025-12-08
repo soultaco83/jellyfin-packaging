@@ -307,6 +307,27 @@ update_plugin_repositories() {
     echo "$(date '+%H:%M:%S') - Plugin repositories configured"
 }
 
+#Temp Fix for Jellyseerr/Infuse/Swiftfin auth - https://github.com/jellyfin/jellyfin/issues/15730
+enable_legacy_authorization() {
+    local system_xml="/config/config/system.xml"
+    if [ ! -f "$system_xml" ]; then
+        echo "$(date '+%H:%M:%S') - system.xml not found yet, legacy authorization will be enabled on next restart"
+        return 0
+    fi
+    echo "$(date '+%H:%M:%S') - Checking EnableLegacyAuthorization setting..."
+    if grep -q "<EnableLegacyAuthorization>false</EnableLegacyAuthorization>" "$system_xml"; then
+        echo "$(date '+%H:%M:%S') - EnableLegacyAuthorization is false, enabling for third-party client compatibility..."
+        sed -i 's|<EnableLegacyAuthorization>false</EnableLegacyAuthorization>|<EnableLegacyAuthorization>true</EnableLegacyAuthorization>|g' "$system_xml"
+        echo "$(date '+%H:%M:%S') - EnableLegacyAuthorization set to true"
+    elif grep -q "<EnableLegacyAuthorization>true</EnableLegacyAuthorization>" "$system_xml"; then
+        echo "$(date '+%H:%M:%S') - EnableLegacyAuthorization already enabled, skipping..."
+    elif ! grep -q "<EnableLegacyAuthorization>" "$system_xml"; then
+        echo "$(date '+%H:%M:%S') - EnableLegacyAuthorization not found, adding it..."
+        awk '/<\/ServerConfiguration>/ { print "  <EnableLegacyAuthorization>true</EnableLegacyAuthorization>" } { print }' "$system_xml" > "${system_xml}.tmp" && mv "${system_xml}.tmp" "$system_xml"
+        echo "$(date '+%H:%M:%S') - EnableLegacyAuthorization added and set to true"
+    fi
+}
+
 # Function to apply temp fixes
 apply_temp_fixes() {
     # Temp fix for webos
@@ -360,8 +381,8 @@ if ! setup_plugins; then
     echo "$(date '+%H:%M:%S') - CRITICAL: Plugin setup failed. Container will continue but plugins may not work."
 fi
 
-# Update plugin repositories in system.xml
 update_plugin_repositories
+enable_legacy_authorization
 
 # Perform backups if needed (these MUST complete before Jellyfin starts)
 if [ "$backup_needed" = true ]; then
