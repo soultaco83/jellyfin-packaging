@@ -2,7 +2,6 @@
 """
 Smart Plugin Downloader for Jellyfin Docker Build
 Queries manifest.json and downloads plugins built for the HIGHEST server version available
-Generates meta.json files for proper plugin management
 """
 
 import json
@@ -11,27 +10,25 @@ import urllib.error
 import zipfile
 import os
 import sys
-import glob
 from pathlib import Path
 
 MANIFEST_URL = "https://www.iamparadox.dev/jellyfin/plugins/manifest.json"
-MEILISEARCH_MANIFEST_URL = "https://raw.githubusercontent.com/arnesacnussem/jellyfin-plugin-meilisearch/refs/heads/master/manifest.json"
 
-def download_manifest(url, name="manifest"):
-    """Download and parse a manifest.json file"""
-    print(f"=== Downloading {name} ===")
-    print(f"URL: {url}")
+def download_manifest():
+    """Download and parse the manifest.json file"""
+    print("=== Smart Plugin Downloader ===")
+    print(f"Manifest URL: {MANIFEST_URL}")
     print()
     
     try:
-        print(f"Fetching {name}...")
-        with urllib.request.urlopen(url) as response:
+        print(f"Fetching manifest from {MANIFEST_URL}...")
+        with urllib.request.urlopen(MANIFEST_URL) as response:
             manifest = json.loads(response.read())
-        print(f"✓ {name} downloaded")
+        print("✓ Manifest downloaded")
         print()
         return manifest
     except Exception as e:
-        print(f"✗ Failed to download {name}: {e}")
+        print(f"✗ Failed to download manifest: {e}")
         return None
 
 def parse_version(version_str):
@@ -51,13 +48,13 @@ def get_highest_version(manifest, guid, plugin_name):
     
     if not plugin:
         print(f"  ✗ Plugin not found in manifest")
-        return None, None
+        return None
     
     # Sort versions by targetAbi (descending)
     versions = plugin.get('versions', [])
     if not versions:
         print(f"  ✗ No versions found for plugin")
-        return None, None
+        return None
     
     sorted_versions = sorted(
         versions,
@@ -69,8 +66,7 @@ def get_highest_version(manifest, guid, plugin_name):
     print(f"  ✓ Found version {best['version']} for server {best['targetAbi']}")
     print(f"  Source: {best['sourceUrl']}")
     
-    # Return both version info and plugin metadata
-    return best, plugin
+    return best
 
 def download_file(url, dest_path):
     """Download a file from URL to destination path"""
@@ -83,55 +79,12 @@ def download_file(url, dest_path):
         print(f"  ✗ Download failed: {e}")
         return False
 
-def find_image_file(target_dir):
-    """Find an image file in the plugin directory for imagePath"""
-    image_extensions = ['*.png', '*.jpg', '*.jpeg', '*.svg', '*.gif']
-    for ext in image_extensions:
-        matches = glob.glob(str(target_dir / ext))
-        if matches:
-            # Return the path relative to /config/plugins
-            return matches[0].replace('/jellyfin/plugins', '/config/plugins')
-    return ""
-
-def create_meta_json(target_dir, plugin_metadata, version_info, plugin_name):
-    """Create meta.json file for the plugin"""
-    
-    # Find image file in the extracted plugin
-    image_path = find_image_file(target_dir)
-    
-    meta = {
-        "category": plugin_metadata.get('category', 'General'),
-        "changelog": version_info.get('changelog', ''),
-        "description": plugin_metadata.get('description', ''),
-        "guid": plugin_metadata.get('guid', ''),
-        "name": plugin_metadata.get('name', plugin_name),
-        "overview": plugin_metadata.get('overview', ''),
-        "owner": plugin_metadata.get('owner', ''),
-        "targetAbi": version_info.get('targetAbi', '10.11.0.0'),
-        "timestamp": version_info.get('timestamp', ''),
-        "version": version_info.get('version', ''),
-        "status": "Active",
-        "autoUpdate": True,
-        "imagePath": image_path,
-        "assemblies": []
-    }
-    
-    meta_path = target_dir / "meta.json"
-    try:
-        with open(meta_path, 'w') as f:
-            json.dump(meta, f, indent=2)
-        print(f"  ✓ Created meta.json")
-        return True
-    except Exception as e:
-        print(f"  ✗ Failed to create meta.json: {e}")
-        return False
-
-def install_plugin(manifest, plugin_name, guid, plugin_dir, env_var_name=None):
+def install_plugin(manifest, plugin_name, guid, plugin_dir):
     """Download and install a plugin"""
     print()
     print(f"=== Installing {plugin_name} ===")
     
-    version_info, plugin_metadata = get_highest_version(manifest, guid, plugin_name)
+    version_info = get_highest_version(manifest, guid, plugin_name)
     if not version_info:
         print(f"  ✗ Failed to find plugin in manifest")
         return False
@@ -157,24 +110,19 @@ def install_plugin(manifest, plugin_name, guid, plugin_dir, env_var_name=None):
         print(f"  ✓ Installed to {target_dir}")
         os.remove(temp_zip)
         
-        # Create meta.json
-        create_meta_json(target_dir, plugin_metadata, version_info, plugin_name)
-        
         # Store version in environment file
-        if env_var_name is None:
-            var_name_map = {
-                "FileTransformation": "FILETRANS_VERSION",
-                "CustomTabs": "CUSTOMTABS_VERSION",
-                "Enhanced": "ENHANCED_VERSION",
-                "PluginPages": "PLUGINPAGES_VERSION",
-                "Meilisearch": "MEILISEARCH_PLUGIN_VERSION"
-            }
-            env_var_name = var_name_map.get(plugin_name, f"{plugin_name.upper()}_VERSION")
+        var_name_map = {
+            "FileTransformation": "FILETRANS_VERSION",
+            "CustomTabs": "CUSTOMTABS_VERSION",
+            "Enhanced": "ENHANCED_VERSION",
+            "PluginPages": "PluginPages_VERSION"
+        }
+        var_name = var_name_map.get(plugin_name, f"{plugin_name.upper()}_VERSION")
         
         with open('/etc/environment', 'a') as f:
-            f.write(f"{env_var_name}={version}\n")
+            f.write(f"{var_name}={version}\n")
         
-        print(f"  {env_var_name}={version} (built for Jellyfin {target_abi})")
+        print(f"  {var_name}={version} (built for Jellyfin {target_abi})")
         return True
         
     except Exception as e:
@@ -218,28 +166,6 @@ def install_enhanced_plugin(plugin_dir):
         
         print(f"  ✓ Installed to {target_dir}")
         
-        # Create meta.json for Enhanced
-        # Get changelog from release info
-        changelog = release_info.get('body', '')
-        
-        plugin_metadata = {
-            "guid": "f69e946a-4b3c-4e9a-8f0a-8d7c1b2c4d9b",
-            "name": "Jellyfin Enhanced",
-            "description": "A combination of the Jellyfin Enhanced and Jellyfin Elsewhere userscripts, providing a comprehensive set of tweaks and features for Jellyfin.",
-            "overview": "Jellyfin Enhanced and Jellyfin Elsewhere for a better Jellyfin experience.",
-            "owner": "n00bcodr",
-            "category": "General"
-        }
-        
-        version_info = {
-            "version": version,
-            "targetAbi": "10.11.0.0",
-            "changelog": changelog,
-            "timestamp": release_info.get('published_at', '')
-        }
-        
-        create_meta_json(target_dir, plugin_metadata, version_info, "Enhanced")
-        
         with open('/etc/environment', 'a') as f:
             f.write(f"ENHANCED_VERSION={version}\n")
         
@@ -250,22 +176,6 @@ def install_enhanced_plugin(plugin_dir):
         print(f"  ✗ Failed to install Enhanced: {e}")
         return False
 
-def install_meilisearch_plugin(plugin_dir):
-    """Install Meilisearch plugin from arnesacnussem repo"""
-    print()
-    print("=== Installing Meilisearch Plugin ===")
-    print("  Note: Meilisearch plugin is from arnesacnussem repo")
-    
-    manifest = download_manifest(MEILISEARCH_MANIFEST_URL, "Meilisearch manifest")
-    if not manifest:
-        print("  ✗ Failed to download Meilisearch manifest")
-        return False
-    
-    # Meilisearch plugin GUID
-    guid = "974395db-b31d-46a2-bc86-ef9aa5ac04dd"
-    
-    return install_plugin(manifest, "Meilisearch", guid, plugin_dir, "MEILISEARCH_PLUGIN_VERSION")
-
 def main():
     # Get plugin directory from command line or use default
     plugin_dir = sys.argv[1] if len(sys.argv) > 1 else "/jellyfin/plugins"
@@ -275,8 +185,8 @@ def main():
     # Create plugin directory
     Path(plugin_dir).mkdir(parents=True, exist_ok=True)
     
-    # Download main manifest
-    manifest = download_manifest(MANIFEST_URL, "IAmParadox manifest")
+    # Download manifest
+    manifest = download_manifest()
     if not manifest:
         print("✗ Cannot proceed without manifest")
         sys.exit(1)
@@ -288,7 +198,7 @@ def main():
     plugins = [
         ("CustomTabs", "fbacd0b6-fd46-4a05-b0a4-2045d6a135b0"),
         ("FileTransformation", "5e87cc92-571a-4d8d-8d98-d2d4147f9f90"),
-        ("PluginPages", "5b6550fa-a014-4f4c-8a2c-59a43680ac6d")
+        ("PluginPages","5b6550fa-a014-4f4c-8a2c-59a43680ac6d")
     ]
     
     for plugin_name, guid in plugins:
@@ -297,14 +207,8 @@ def main():
         else:
             fail_count += 1
     
-    # Install Enhanced separately (different repo)
+    # Install Enhanced separately
     if install_enhanced_plugin(plugin_dir):
-        success_count += 1
-    else:
-        fail_count += 1
-    
-    # Install Meilisearch plugin (different manifest)
-    if install_meilisearch_plugin(plugin_dir):
         success_count += 1
     else:
         fail_count += 1

@@ -23,9 +23,6 @@ ARG MALI_PKG_VER=1.9-1_arm64
 ARG MALI_PKG_TAG=v1.9-1-2131373
 ARG MALI_PKG_CFG=valhall-g610-g24p0-gbm
 
-# Meilisearch version
-ARG MEILISEARCH_VERSION=v1.12.3
-
 # Debian architecture (amd64, arm64, armhf), set by build script
 ARG PACKAGE_ARCH
 # Dotnet architeture (x64, arm64, arm), set by build script
@@ -121,8 +118,6 @@ ARG MALI_PKG_VER
 ARG MALI_PKG_TAG
 ARG MALI_PKG_CFG
 
-ARG MEILISEARCH_VERSION
-
 ARG PACKAGE_ARCH
 
 # Set the health URL
@@ -141,13 +136,6 @@ ENV DEBIAN_FRONTEND="noninteractive" \
     JELLYFIN_FFMPEG="/usr/lib/jellyfin-ffmpeg/ffmpeg"
 
 ENV JELLYFIN_PLUGIN_PATH="/usr/lib/jellyfin/plugins:${JELLYFIN_DATA_DIR}/plugins"
-
-# Meilisearch configuration for the plugin
-ENV MEILI_URL="http://127.0.0.1:7700" \
-    MEILI_MASTER_KEY="" \
-    MEILI_ENV="production" \
-    MEILI_DB_PATH="/config/meilisearch/data" \
-    MEILI_NO_ANALYTICS="true"
     
 # required for fontconfig cache
 ENV XDG_CACHE_HOME=${JELLYFIN_CACHE_DIR}
@@ -228,20 +216,6 @@ RUN if test "${PACKAGE_ARCH}" = "arm64"; then \
  && apt-get autoremove --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
-# Install Meilisearch binary
-RUN MEILI_ARCH="" \
- && if [ "${PACKAGE_ARCH}" = "amd64" ]; then MEILI_ARCH="amd64"; \
-    elif [ "${PACKAGE_ARCH}" = "arm64" ]; then MEILI_ARCH="aarch64"; \
-    fi \
- && if [ -n "${MEILI_ARCH}" ]; then \
-        echo "Installing Meilisearch ${MEILISEARCH_VERSION} for ${MEILI_ARCH}..." \
-     && curl -L "https://github.com/meilisearch/meilisearch/releases/download/${MEILISEARCH_VERSION}/meilisearch-linux-${MEILI_ARCH}" -o /usr/local/bin/meilisearch \
-     && chmod +x /usr/local/bin/meilisearch \
-     && echo "Meilisearch installed successfully" \
-     ; else \
-        echo "WARNING: Meilisearch not available for architecture ${PACKAGE_ARCH}" \
-     ; fi
-
 # Setup jemalloc: link the library to a path owned by us to handle arch specific library paths
 RUN mkdir -p /usr/lib/jellyfin \
   && JEMALLOC_LINKED=0 \
@@ -316,7 +290,6 @@ LABEL "org.opencontainers.image.version"="${JELLYFIN_VERSION}"
 LABEL "org.opencontainers.image.url"="https://jellyfin.org"
 
 EXPOSE 8096
-EXPOSE 7700
 VOLUME ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR}
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["/jellyfin/jellyfin"]

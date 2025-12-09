@@ -127,34 +127,6 @@ get_installed_version() {
     echo "$installed_version"
 }
 
-# Function to validate and fix meta.json
-validate_meta_json() {
-    local plugin_dir="$1"
-    local meta_file="${plugin_dir}/meta.json"
-    
-    if [ ! -f "$meta_file" ]; then
-        echo "$(date '+%H:%M:%S') - Warning: meta.json not found in $plugin_dir"
-        return 1
-    fi
-    
-    # Check if category is empty or missing using python for reliable JSON parsing
-    local category=$(python3 -c "import json; print(json.load(open('$meta_file')).get('category', ''))" 2>/dev/null)
-    
-    if [ -z "$category" ] || [ "$category" = "None" ]; then
-        echo "$(date '+%H:%M:%S') - Warning: meta.json in $plugin_dir has empty category, setting to 'General'"
-        python3 -c "
-import json
-with open('$meta_file', 'r') as f:
-    data = json.load(f)
-data['category'] = 'General'
-with open('$meta_file', 'w') as f:
-    json.dump(data, f, indent=2)
-" 2>/dev/null
-    fi
-    
-    return 0
-}
-
 # Function to setup plugins (simplified since plugins are now pre-downloaded)
 setup_plugins() {
     echo "$(date '+%H:%M:%S') - Checking pre-installed plugins..."
@@ -166,7 +138,6 @@ setup_plugins() {
     local customtabs_version=$(grep -oP 'CUSTOMTABS_VERSION=\K.*' /etc/environment 2>/dev/null)
     local filetrans_version=$(grep -oP 'FILETRANS_VERSION=\K.*' /etc/environment 2>/dev/null)
     local enhanced_version=$(grep -oP 'ENHANCED_VERSION=\K.*' /etc/environment 2>/dev/null)
-    local meilisearch_version=$(grep -oP 'MEILISEARCH_PLUGIN_VERSION=\K.*' /etc/environment 2>/dev/null)
 
     local all_success=true
 
@@ -186,7 +157,6 @@ setup_plugins() {
                     mkdir -p "${target_dir}"
                     cp -r "${source_dir}"/* "${target_dir}/"
                     chmod -R 755 "${target_dir}"
-                    validate_meta_json "${target_dir}"
                     echo "$(date '+%H:%M:%S') - CustomTabs plugin updated to version $customtabs_version"
                 else
                     echo "$(date '+%H:%M:%S') - Warning: CustomTabs plugin source not found at $source_dir"
@@ -202,7 +172,6 @@ setup_plugins() {
                 mkdir -p "${target_dir}"
                 cp -r "${source_dir}"/* "${target_dir}/"
                 chmod -R 755 "${target_dir}"
-                validate_meta_json "${target_dir}"
                 echo "$(date '+%H:%M:%S') - CustomTabs plugin installed successfully"
             else
                 echo "$(date '+%H:%M:%S') - Warning: CustomTabs plugin not found at $source_dir"
@@ -227,7 +196,6 @@ setup_plugins() {
                     mkdir -p "${target_dir}"
                     cp -r "${source_dir}"/* "${target_dir}/"
                     chmod -R 755 "${target_dir}"
-                    validate_meta_json "${target_dir}"
                     echo "$(date '+%H:%M:%S') - FileTransformation plugin updated to version $filetrans_version"
                 else
                     echo "$(date '+%H:%M:%S') - Warning: FileTransformation plugin source not found at $source_dir"
@@ -243,7 +211,6 @@ setup_plugins() {
                 mkdir -p "${target_dir}"
                 cp -r "${source_dir}"/* "${target_dir}/"
                 chmod -R 755 "${target_dir}"
-                validate_meta_json "${target_dir}"
                 echo "$(date '+%H:%M:%S') - FileTransformation plugin installed successfully"
             else
                 echo "$(date '+%H:%M:%S') - Warning: FileTransformation plugin not found at $source_dir"
@@ -268,7 +235,6 @@ setup_plugins() {
                     mkdir -p "${target_dir}"
                     cp -r "${source_dir}"/* "${target_dir}/"
                     chmod -R 755 "${target_dir}"
-                    validate_meta_json "${target_dir}"
                     echo "$(date '+%H:%M:%S') - Enhanced plugin updated to version $enhanced_version"
                 else
                     echo "$(date '+%H:%M:%S') - Warning: Enhanced plugin source not found at $source_dir"
@@ -284,51 +250,9 @@ setup_plugins() {
                 mkdir -p "${target_dir}"
                 cp -r "${source_dir}"/* "${target_dir}/"
                 chmod -R 755 "${target_dir}"
-                validate_meta_json "${target_dir}"
                 echo "$(date '+%H:%M:%S') - Enhanced plugin installed successfully"
             else
                 echo "$(date '+%H:%M:%S') - Warning: Enhanced plugin not found at $source_dir"
-                all_success=false
-            fi
-        fi
-    fi
-
-    # Install Meilisearch plugin (only if needed or if newer)
-    if [ -n "$meilisearch_version" ]; then
-        local source_dir="/jellyfin/plugins/Meilisearch_${meilisearch_version}"
-        local target_dir="/config/plugins/Meilisearch_${meilisearch_version}"
-        local installed_version=$(get_installed_version "Meilisearch")
-        
-        if [ -n "$installed_version" ]; then
-            if version_gt "$meilisearch_version" "$installed_version"; then
-                echo "$(date '+%H:%M:%S') - Newer Meilisearch plugin version available ($meilisearch_version > $installed_version), updating..."
-                # Clean old versions
-                rm -rf /config/plugins/Meilisearch_* 2>/dev/null || true
-                
-                if [ -d "$source_dir" ]; then
-                    mkdir -p "${target_dir}"
-                    cp -r "${source_dir}"/* "${target_dir}/"
-                    chmod -R 755 "${target_dir}"
-                    validate_meta_json "${target_dir}"
-                    echo "$(date '+%H:%M:%S') - Meilisearch plugin updated to version $meilisearch_version"
-                else
-                    echo "$(date '+%H:%M:%S') - Warning: Meilisearch plugin source not found at $source_dir"
-                    all_success=false
-                fi
-            else
-                echo "$(date '+%H:%M:%S') - Meilisearch plugin version $installed_version already installed (>= $meilisearch_version), skipping..."
-            fi
-        else
-            echo "$(date '+%H:%M:%S') - Installing Meilisearch plugin version: $meilisearch_version"
-            
-            if [ -d "$source_dir" ]; then
-                mkdir -p "${target_dir}"
-                cp -r "${source_dir}"/* "${target_dir}/"
-                chmod -R 755 "${target_dir}"
-                validate_meta_json "${target_dir}"
-                echo "$(date '+%H:%M:%S') - Meilisearch plugin installed successfully"
-            else
-                echo "$(date '+%H:%M:%S') - Warning: Meilisearch plugin not found at $source_dir"
                 all_success=false
             fi
         fi
@@ -380,15 +304,6 @@ update_plugin_repositories() {
         echo "$(date '+%H:%M:%S') - IAmParadox plugin repository already exists, skipping..."
     fi
 
-    # Add Meilisearch plugin repository if not present
-    local meilisearch_repo_url="https://raw.githubusercontent.com/arnesacnussem/jellyfin-plugin-meilisearch/refs/heads/master/manifest.json"
-    if ! grep -qF "$meilisearch_repo_url" "$system_xml"; then
-        echo "$(date '+%H:%M:%S') - Adding Meilisearch plugin repository"
-        sed -i 's|  </PluginRepositories>|    <RepositoryInfo>\n      <Name>Meilisearch Plugin</Name>\n      <Url>'"$meilisearch_repo_url"'</Url>\n      <Enabled>true</Enabled>\n    </RepositoryInfo>\n  </PluginRepositories>|' "$system_xml"
-    else
-        echo "$(date '+%H:%M:%S') - Meilisearch plugin repository already exists, skipping..."
-    fi
-
     echo "$(date '+%H:%M:%S') - Plugin repositories configured"
 }
 
@@ -423,75 +338,6 @@ apply_temp_fixes() {
     # Temp fix for tmp folder requirement
     mkdir -p /tmp/jellyfin
 }
-
-# Function to start Meilisearch
-start_meilisearch() {
-    echo "$(date '+%H:%M:%S') - Starting Meilisearch..."
-    
-    # Check if Meilisearch binary exists
-    if [ ! -x /usr/local/bin/meilisearch ]; then
-        echo "$(date '+%H:%M:%S') - WARNING: Meilisearch binary not found, skipping Meilisearch startup"
-        return 1
-    fi
-    
-    # Create Meilisearch data directory
-    mkdir -p "${MEILI_DB_PATH:-/config/meilisearch/data}"
-    
-    # Build Meilisearch command
-    local meili_cmd="/usr/local/bin/meilisearch"
-    meili_cmd="$meili_cmd --db-path ${MEILI_DB_PATH:-/config/meilisearch/data}"
-    meili_cmd="$meili_cmd --http-addr 127.0.0.1:7700"
-    meili_cmd="$meili_cmd --env ${MEILI_ENV:-production}"
-    
-    # Add master key if set
-    if [ -n "${MEILI_MASTER_KEY}" ]; then
-        meili_cmd="$meili_cmd --master-key ${MEILI_MASTER_KEY}"
-    fi
-    
-    # Disable analytics
-    if [ "${MEILI_NO_ANALYTICS:-true}" = "true" ]; then
-        meili_cmd="$meili_cmd --no-analytics"
-    fi
-    
-    # Start Meilisearch in background
-    echo "$(date '+%H:%M:%S') - Meilisearch command: $meili_cmd"
-    $meili_cmd >> /config/log/meilisearch.log 2>&1 &
-    MEILI_PID=$!
-    
-    # Wait for Meilisearch to be ready
-    local max_attempts=30
-    local attempt=0
-    while [ $attempt -lt $max_attempts ]; do
-        if curl -sf http://127.0.0.1:7700/health > /dev/null 2>&1; then
-            echo "$(date '+%H:%M:%S') - Meilisearch is ready (PID: $MEILI_PID)"
-            return 0
-        fi
-        attempt=$((attempt + 1))
-        sleep 1
-    done
-    
-    echo "$(date '+%H:%M:%S') - WARNING: Meilisearch failed to start within ${max_attempts} seconds"
-    return 1
-}
-
-# Function to stop Meilisearch gracefully
-stop_meilisearch() {
-    if [ -n "$MEILI_PID" ] && kill -0 "$MEILI_PID" 2>/dev/null; then
-        echo "$(date '+%H:%M:%S') - Stopping Meilisearch (PID: $MEILI_PID)..."
-        kill -TERM "$MEILI_PID" 2>/dev/null
-        wait "$MEILI_PID" 2>/dev/null
-        echo "$(date '+%H:%M:%S') - Meilisearch stopped"
-    fi
-}
-
-# Trap to handle container shutdown
-cleanup() {
-    echo "$(date '+%H:%M:%S') - Received shutdown signal, cleaning up..."
-    stop_meilisearch
-    exit 0
-}
-
-trap cleanup SIGTERM SIGINT
 
 # Main execution starts here
 echo "$(date '+%H:%M:%S') - Container startup initiated"
@@ -551,9 +397,6 @@ fi
 
 # Wait for all background operations to complete
 wait
-
-# Start Meilisearch before Jellyfin
-start_meilisearch
 
 # Update marker file
 touch "$CONTAINER_MARKER"
