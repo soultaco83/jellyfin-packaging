@@ -476,6 +476,15 @@ start_meilisearch() {
     # Create Meilisearch data and log directories
     mkdir -p "${MEILI_DB_PATH:-/config/meilisearch/data}"
     mkdir -p /config/log
+    mkdir -p /config/ScheduledTasks
+    
+    # Copy Meilisearch scheduled task if it doesn't exist
+    local task_file="/config/ScheduledTasks/c75bc4c1-e1c5-1364-0532-019143c0fb27.js"
+    local task_source="/usr/share/jellyfin/scheduled-tasks/c75bc4c1-e1c5-1364-0532-019143c0fb27.js"
+    if [ ! -f "$task_file" ] && [ -f "$task_source" ]; then
+        cp "$task_source" "$task_file"
+        echo "$(date '+%H:%M:%S') - Installed Meilisearch scheduled task (weekly indexing on Sunday)"
+    fi
     
     # Test the binary first
     echo "$(date '+%H:%M:%S') - Testing Meilisearch binary..."
