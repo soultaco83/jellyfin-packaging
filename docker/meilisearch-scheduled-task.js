@@ -1,0 +1,1 @@
+[{"Type":"WeeklyTrigger","TimeOfDayTicks":0,"DayOfWeek":"Sunday"}]
