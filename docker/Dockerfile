@@ -169,7 +169,6 @@ RUN apt-get update \
     apt-transport-https \
     zip \
     unzip \
-    cron \
  && curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key \
   | gpg --dearmor -o /etc/apt/keyrings/jellyfin.gpg \
  && cat <<EOF > /etc/apt/sources.list.d/jellyfin.sources
@@ -190,6 +189,7 @@ RUN apt-get update \
     libfontconfig1 \
     libfreetype6 \
     libjemalloc2 \
+    python3 \
  && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen \
  && apt-get remove gnupg apt-transport-https --yes \
  && apt-get clean autoclean --yes \
@@ -270,42 +270,22 @@ COPY --from=web /web /jellyfin/jellyfin-web
 
 RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    wget \
-    apt-transport-https && \
-    wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
-    dpkg -i packages-microsoft-prod.deb && \
-    rm packages-microsoft-prod.deb && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-    dotnet-sdk-8.0 \
-    jq \
-    net-tools \
-    file \
-    lsof \
-    python3 \
-    strace \
-    sqlite3	&& \
-    rm -rf /var/lib/apt/lists/*
-
-
+# Download plugins (Python script - no dotnet needed)
 COPY docker/download-plugins-manifest.py /tmp/download-plugins.py
-RUN python3 /tmp/download-plugins.py "/jellyfin/plugins" && \
-    rm /tmp/download-plugins.py
+RUN python3 /tmp/download-plugins.py "/jellyfin/plugins" \
+ && rm /tmp/download-plugins.py
 
+# Copy entrypoint and scheduled task
 COPY docker/docker-entrypoint.sh /usr/local/bin/
+COPY docker/meilisearch-scheduled-task.js /usr/share/jellyfin/scheduled-tasks/c75bc4c1-e1c5-1364-0532-019143c0fb27.js
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-RUN apt-get remove -y dotnet-sdk-8.0 jq wget && \
-    apt-get autoremove -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN echo "Contents of /jellyfin/plugins after installation:" && \
-    ls -R /jellyfin/plugins && \
-    echo "All DLL files in /jellyfin/plugins:" && \
-    find /jellyfin/plugins -name "*.dll"
+# Final cleanup - remove packages only needed during build
+RUN apt-get update \
+ && apt-get remove -y unzip \
+ && apt-get autoremove -y \
+ && apt-get clean \
+ && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 ARG JELLYFIN_VERSION
 LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-packaging"
