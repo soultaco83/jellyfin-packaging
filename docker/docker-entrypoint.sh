@@ -493,11 +493,33 @@ start_meilisearch() {
     
     # Start Meilisearch in background with full error capture
     echo "$(date '+%H:%M:%S') - Launching Meilisearch daemon..."
+    
+    # Check if we have a master key configured or stored
+    local key_file="/config/meilisearch/.master_key"
+    MEILI_MASTER_KEY="${MEILI_MASTER_KEY:-}"
+    
+    if [ -z "$MEILI_MASTER_KEY" ]; then
+        # Check if we have a previously generated key
+        if [ -f "$key_file" ]; then
+            MEILI_MASTER_KEY=$(cat "$key_file")
+            echo "$(date '+%H:%M:%S') - Using stored Meilisearch master key"
+        else
+            # Generate a new key and store it
+            MEILI_MASTER_KEY=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 32)
+            echo "$MEILI_MASTER_KEY" > "$key_file"
+            chmod 600 "$key_file"
+            echo "$(date '+%H:%M:%S') - Generated new Meilisearch master key"
+        fi
+    fi
+    
+    # Export the key so the Meilisearch plugin can use it
+    export MEILI_MASTER_KEY
+    
     /usr/local/bin/meilisearch \
         --db-path "${MEILI_DB_PATH:-/config/meilisearch/data}" \
         --http-addr 127.0.0.1:7700 \
         --env "${MEILI_ENV:-production}" \
-        ${MEILI_MASTER_KEY:+--master-key "$MEILI_MASTER_KEY"} \
+        --master-key "$MEILI_MASTER_KEY" \
         --no-analytics \
         >> /config/log/meilisearch.log 2>&1 &
     MEILI_PID=$!
