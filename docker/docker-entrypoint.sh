@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Global variables
+MEILI_PID=""
+
 # Create a marker file to detect container recreation and version changes
 CONTAINER_MARKER="/config/.container_marker"
 DOCKER_BUILD_FILE="/config/.last_docker_build"
@@ -424,6 +427,41 @@ apply_temp_fixes() {
     mkdir -p /tmp/jellyfin
 }
 
+# Function to disable Meilisearch plugin
+disable_meilisearch_plugin() {
+    echo "$(date '+%H:%M:%S') - Disabling Meilisearch plugin..."
+    
+    # Find Meilisearch plugin directory
+    local plugin_dir=$(find /config/plugins -maxdepth 1 -type d -name "Meilisearch_*" 2>/dev/null | head -n1)
+    
+    if [ -z "$plugin_dir" ]; then
+        echo "$(date '+%H:%M:%S') - Meilisearch plugin not found in /config/plugins, skipping disable"
+        return 0
+    fi
+    
+    local meta_file="${plugin_dir}/meta.json"
+    
+    if [ ! -f "$meta_file" ]; then
+        echo "$(date '+%H:%M:%S') - meta.json not found in $plugin_dir, skipping disable"
+        return 0
+    fi
+    
+    # Update status from Active to Disabled
+    if python3 -c "
+import json
+with open('$meta_file', 'r') as f:
+    data = json.load(f)
+data['status'] = 'Disabled'
+with open('$meta_file', 'w') as f:
+    json.dump(data, f, indent=2)
+print('OK')
+" 2>/dev/null | grep -q "OK"; then
+        echo "$(date '+%H:%M:%S') - Meilisearch plugin disabled successfully"
+    else
+        echo "$(date '+%H:%M:%S') - Warning: Failed to disable Meilisearch plugin"
+    fi
+}
+
 # Function to start Meilisearch
 start_meilisearch() {
     echo "$(date '+%H:%M:%S') - Starting Meilisearch..."
@@ -431,37 +469,55 @@ start_meilisearch() {
     # Check if Meilisearch binary exists
     if [ ! -x /usr/local/bin/meilisearch ]; then
         echo "$(date '+%H:%M:%S') - WARNING: Meilisearch binary not found, skipping Meilisearch startup"
-        return 1
+        disable_meilisearch_plugin
+        return 0  # Return success so container doesn't fail
     fi
     
-    # Create Meilisearch data directory
+    # Create Meilisearch data and log directories
     mkdir -p "${MEILI_DB_PATH:-/config/meilisearch/data}"
+    mkdir -p /config/log
     
-    # Build Meilisearch command
-    local meili_cmd="/usr/local/bin/meilisearch"
-    meili_cmd="$meili_cmd --db-path ${MEILI_DB_PATH:-/config/meilisearch/data}"
-    meili_cmd="$meili_cmd --http-addr 127.0.0.1:7700"
-    meili_cmd="$meili_cmd --env ${MEILI_ENV:-production}"
-    
-    # Add master key if set
-    if [ -n "${MEILI_MASTER_KEY}" ]; then
-        meili_cmd="$meili_cmd --master-key ${MEILI_MASTER_KEY}"
+    # Test the binary first
+    echo "$(date '+%H:%M:%S') - Testing Meilisearch binary..."
+    if ! /usr/local/bin/meilisearch --version > /config/log/meilisearch.log 2>&1; then
+        echo "$(date '+%H:%M:%S') - WARNING: Meilisearch binary test failed. Error output:"
+        cat /config/log/meilisearch.log
+        echo "$(date '+%H:%M:%S') - Continuing without Meilisearch..."
+        disable_meilisearch_plugin
+        return 0  # Return success so container doesn't fail
     fi
+    echo "$(date '+%H:%M:%S') - Meilisearch binary OK: $(cat /config/log/meilisearch.log)"
     
-    # Disable analytics
-    if [ "${MEILI_NO_ANALYTICS:-true}" = "true" ]; then
-        meili_cmd="$meili_cmd --no-analytics"
-    fi
+    # Clear log for fresh start
+    > /config/log/meilisearch.log
     
-    # Start Meilisearch in background
-    echo "$(date '+%H:%M:%S') - Meilisearch command: $meili_cmd"
-    $meili_cmd >> /config/log/meilisearch.log 2>&1 &
+    # Start Meilisearch in background with full error capture
+    echo "$(date '+%H:%M:%S') - Launching Meilisearch daemon..."
+    /usr/local/bin/meilisearch \
+        --db-path "${MEILI_DB_PATH:-/config/meilisearch/data}" \
+        --http-addr 127.0.0.1:7700 \
+        --env "${MEILI_ENV:-production}" \
+        ${MEILI_MASTER_KEY:+--master-key "$MEILI_MASTER_KEY"} \
+        --no-analytics \
+        >> /config/log/meilisearch.log 2>&1 &
     MEILI_PID=$!
+    
+    echo "$(date '+%H:%M:%S') - Meilisearch started with PID: $MEILI_PID"
     
     # Wait for Meilisearch to be ready
     local max_attempts=30
     local attempt=0
     while [ $attempt -lt $max_attempts ]; do
+        # Check if process is still running
+        if ! kill -0 "$MEILI_PID" 2>/dev/null; then
+            echo "$(date '+%H:%M:%S') - WARNING: Meilisearch process died. Log output:"
+            cat /config/log/meilisearch.log
+            echo "$(date '+%H:%M:%S') - Continuing without Meilisearch..."
+            MEILI_PID=""
+            disable_meilisearch_plugin
+            return 0  # Return success so container doesn't fail
+        fi
+        
         if curl -sf http://127.0.0.1:7700/health > /dev/null 2>&1; then
             echo "$(date '+%H:%M:%S') - Meilisearch is ready (PID: $MEILI_PID)"
             return 0
@@ -470,16 +526,20 @@ start_meilisearch() {
         sleep 1
     done
     
-    echo "$(date '+%H:%M:%S') - WARNING: Meilisearch failed to start within ${max_attempts} seconds"
-    return 1
+    echo "$(date '+%H:%M:%S') - WARNING: Meilisearch failed to respond within ${max_attempts} seconds"
+    echo "$(date '+%H:%M:%S') - Meilisearch log output:"
+    cat /config/log/meilisearch.log
+    echo "$(date '+%H:%M:%S') - Continuing without Meilisearch..."
+    disable_meilisearch_plugin
+    return 0  # Return success so container doesn't fail
 }
 
 # Function to stop Meilisearch gracefully
 stop_meilisearch() {
     if [ -n "$MEILI_PID" ] && kill -0 "$MEILI_PID" 2>/dev/null; then
         echo "$(date '+%H:%M:%S') - Stopping Meilisearch (PID: $MEILI_PID)..."
-        kill -TERM "$MEILI_PID" 2>/dev/null
-        wait "$MEILI_PID" 2>/dev/null
+        kill -TERM "$MEILI_PID" 2>/dev/null || true
+        wait "$MEILI_PID" 2>/dev/null || true
         echo "$(date '+%H:%M:%S') - Meilisearch stopped"
     fi
 }
