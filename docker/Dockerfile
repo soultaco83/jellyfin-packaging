@@ -196,6 +196,16 @@ RUN apt-get update \
  && apt-get autoremove --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
+# Update intel-media-driver for Battlemage (B570/B580) support
+RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
+    apt-get update \
+ && apt-get install -y --no-install-recommends \
+    intel-media-va-driver-non-free \
+ && apt-get clean autoclean --yes \
+ && apt-get autoremove --yes \
+ && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
+ ; fi
+
 # Intel OpenCL Tone mapping dependencies:
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     mkdir intel-compute-runtime \
