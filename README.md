@@ -4,7 +4,7 @@
 # Jellyfin with Pre-installed Plugins
 
 This Docker image includes Jellyfin with several pre-installed plugins for enhanced functionality.
-
+NOW PREINSTALLED MEILISEARCH with accompanying plugin
 ## Included Plugins
 
 This image comes with the following plugins pre-installed:
