@@ -186,6 +186,82 @@ def install_plugin(manifest, plugin_name, guid, plugin_dir, env_var_name=None):
             os.remove(temp_zip)
         return False
 
+def install_customtabs_plugin(plugin_dir):
+    """Install CustomTabs plugin from soultaco83 repo (always latest release)"""
+    print()
+    print("=== Installing CustomTabs ===")
+    print("  Note: CustomTabs is from soultaco83 repo for master branch compatibility")
+    
+    try:
+        # Get latest release from GitHub API
+        api_url = "https://api.github.com/repos/soultaco83/jellyfin-plugin-custom-tabs/releases/latest"
+        print(f"  Fetching latest release from GitHub API...")
+        
+        with urllib.request.urlopen(api_url) as response:
+            release_info = json.loads(response.read())
+        
+        release_tag = release_info['tag_name']
+        print(f"  Latest release: {release_tag}")
+        
+        # Find the zip asset in the release
+        download_url = None
+        for asset in release_info.get('assets', []):
+            if asset['name'].endswith('.zip'):
+                download_url = asset['browser_download_url']
+                print(f"  Found asset: {asset['name']}")
+                break
+        
+        if not download_url:
+            print("  ✗ No zip file found in release assets")
+            return False
+        
+        # Use fixed version for consistency
+        version = "1.0.0.0"
+        
+        print(f"  Version: {version}")
+        print(f"  Downloading from: {download_url}")
+        temp_zip = "/tmp/customtabs.zip"
+        
+        if not download_file(download_url, temp_zip):
+            return False
+        
+        target_dir = Path(plugin_dir) / f"CustomTabs_{version}"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        
+        with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
+            zip_ref.extractall(target_dir)
+        
+        print(f"  ✓ Installed to {target_dir}")
+        
+        # Create meta.json for CustomTabs
+        plugin_metadata = {
+            "guid": "fbacd0b6-fd46-4a05-b0a4-2045d6a135b0",
+            "name": "Custom Tabs",
+            "description": "Allows adding custom tabs to the Jellyfin web interface.",
+            "overview": "Add custom tabs to Jellyfin.",
+            "owner": "soultaco83",
+            "category": "General"
+        }
+        
+        version_info = {
+            "version": version,
+            "targetAbi": "10.11.0.0",
+            "changelog": "Soultaco83 change for master branch compatiblity",
+            "timestamp": release_info.get('published_at', '')
+        }
+        
+        create_meta_json(target_dir, plugin_metadata, version_info, "CustomTabs")
+        
+        with open('/etc/environment', 'a') as f:
+            f.write(f"CUSTOMTABS_VERSION={version}\n")
+        
+        os.remove(temp_zip)
+        return True
+        
+    except Exception as e:
+        print(f"  ✗ Failed to install CustomTabs: {e}")
+        return False
+
 def install_enhanced_plugin(plugin_dir):
     """Install Enhanced plugin from n00bcodr repo"""
     print()
@@ -285,8 +361,8 @@ def main():
     success_count = 0
     fail_count = 0
     
+    # Plugins from IAmParadox manifest (CustomTabs removed - using soultaco83 repo instead)
     plugins = [
-        ("CustomTabs", "fbacd0b6-fd46-4a05-b0a4-2045d6a135b0"),
         ("FileTransformation", "5e87cc92-571a-4d8d-8d98-d2d4147f9f90"),
         ("PluginPages", "5b6550fa-a014-4f4c-8a2c-59a43680ac6d")
     ]
@@ -296,6 +372,12 @@ def main():
             success_count += 1
         else:
             fail_count += 1
+    
+    # Install CustomTabs from soultaco83 repo (master branch compatible)
+    if install_customtabs_plugin(plugin_dir):
+        success_count += 1
+    else:
+        fail_count += 1
     
     # Install Enhanced separately (different repo)
     if install_enhanced_plugin(plugin_dir):
