@@ -196,11 +196,16 @@ RUN apt-get update \
  && apt-get autoremove --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
-# Update intel-media-driver for Battlemage (B570/B580) support
+# Update intel-media-driver for Battlemage (B570/B580) support from Intel's upstream repo
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     apt-get update \
+ && apt-get install -y --no-install-recommends gnupg \
+ && curl -fsSL https://repositories.intel.com/gpu/intel-graphics.key | gpg --dearmor -o /usr/share/keyrings/intel-graphics.gpg \
+ && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics.gpg] https://repositories.intel.com/gpu/ubuntu noble unified" > /etc/apt/sources.list.d/intel-gpu.list \
+ && apt-get update \
  && apt-get install -y --no-install-recommends \
     intel-media-va-driver-non-free \
+ && rm -f /etc/apt/sources.list.d/intel-gpu.list \
  && apt-get clean autoclean --yes \
  && apt-get autoremove --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
