@@ -196,7 +196,48 @@ RUN apt-get update \
  && apt-get autoremove --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
+# =============================================================================
+# Intel VAAPI Media Driver from Intel's Official GPU Repository
+# For Battlemage (B570/B580) hardware transcoding support
+# This MUST come BEFORE the OpenCL section as it provides iHD_drv_video.so
+# =============================================================================
+RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
+    apt-get update \
+ && apt-get install --no-install-recommends --no-install-suggests --yes \
+    wget \
+    gnupg \
+    ca-certificates \
+ # Add Intel GPU repository GPG key
+ && wget -qO - https://repositories.intel.com/gpu/intel-graphics.key | \
+    gpg --yes --dearmor -o /usr/share/keyrings/intel-graphics.gpg \
+ # Add Intel GPU repository (using Ubuntu Noble 'client' repo for latest drivers)
+ # The 'client' repo contains the latest rolling release with Battlemage support
+ && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics.gpg] https://repositories.intel.com/gpu/ubuntu noble client" \
+    > /etc/apt/sources.list.d/intel-gpu.list \
+ && apt-get update \
+ # Install media driver and related packages for VAAPI hardware acceleration
+ && apt-get install --no-install-recommends --no-install-suggests --yes \
+    intel-media-va-driver-non-free \
+    libmfx-gen1.2 \
+    libvpl2 \
+    libvpl-tools \
+    libva-glx2 \
+    va-driver-all \
+    vainfo \
+ # Cleanup temporary packages
+ && apt-get remove --yes wget \
+ && apt-get autoremove --yes \
+ && apt-get clean autoclean --yes \
+ && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
+ ; fi
+
+# Intel VAAPI environment variables - ensure iHD driver is used
+ENV LIBVA_DRIVER_NAME=iHD
+ENV LIBVA_DRIVERS_PATH=/usr/lib/x86_64-linux-gnu/dri
+
 # Intel OpenCL Tone mapping dependencies:
+# Note: This section installs compute runtime for OpenCL-based tone mapping
+# The media driver above handles VAAPI encode/decode
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     mkdir intel-compute-runtime \
  && cd intel-compute-runtime \
@@ -242,6 +283,21 @@ RUN MEILI_ARCH="" \
         echo "WARNING: Meilisearch not available for architecture ${PACKAGE_ARCH}" \
      ; fi
 
+# Add fonts for east asian languages rendering
+RUN apt update --yes \
+ && apt install --no-install-recommends --no-install-suggests --yes \
+        fonts-wqy-zenhei \
+        fonts-wqy-microhei \
+        fonts-arphic-ukai \
+        fonts-arphic-uming \
+        fonts-noto-cjk \
+        fonts-ipafont-mincho \
+        fonts-ipafont-gothic \
+        fonts-unfonts-core \
+ && apt clean autoclean --yes \
+ && apt autoremove --yes \
+ && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
+
 # Setup jemalloc: link the library to a path owned by us to handle arch specific library paths
 RUN mkdir -p /usr/lib/jellyfin \
   && JEMALLOC_LINKED=0 \
@@ -260,6 +316,7 @@ RUN mkdir -p /usr/lib/jellyfin \
          echo "WARNING: jemalloc library .so file not found for PACKAGE_ARCH ${PACKAGE_ARCH}. Either the arch is not supported or copy failed. LD_PRELOAD might not work as expected." >&2; \
      fi
 
+# Set LD_PRELOAD to use the linked jemalloc library
 ENV LD_PRELOAD=/usr/lib/jellyfin/libjemalloc.so.2
 
 RUN mkdir -p ${JELLYFIN_DATA_DIR} ${JELLYFIN_CACHE_DIR} \
