@@ -18,6 +18,10 @@ ARG NEO_VER=25.35.35096.9
 ARG IGC1_LEGACY_VER=1.0.17537.24
 ARG NEO_LEGACY_VER=24.35.30872.36
 
+# Intel Media Driver - use master for latest Battlemage support
+# Or pin to a specific tag like: intel-media-25.3.4
+ARG MEDIA_DRIVER_VERSION=master
+
 # https://github.com/tsukumijima/libmali-rockchip
 ARG MALI_PKG_VER=1.9-1_arm64
 ARG MALI_PKG_TAG=v1.9-1-2131373
@@ -117,6 +121,8 @@ ARG NEO_VER
 ARG IGC1_LEGACY_VER
 ARG NEO_LEGACY_VER
 
+ARG MEDIA_DRIVER_VERSION
+
 ARG MALI_PKG_VER
 ARG MALI_PKG_TAG
 ARG MALI_PKG_CFG
@@ -197,35 +203,45 @@ RUN apt-get update \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
 # =============================================================================
-# Intel VAAPI Media Driver from Intel's Official GPU Repository
-# For Battlemage (B570/B580) hardware transcoding support
-# This MUST come BEFORE the OpenCL section as it provides iHD_drv_video.so
+# Intel VAAPI Media Driver - BUILD FROM SOURCE for Battlemage (B570/B580)
+# Version 24.4.4+ required for BMG encoding support
+# Pre-packaged drivers are too old - must build from source
 # =============================================================================
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     apt-get update \
  && apt-get install --no-install-recommends --no-install-suggests --yes \
-    wget \
-    gnupg \
-    ca-certificates \
- # Add Intel GPU repository GPG key
- && wget -qO - https://repositories.intel.com/gpu/intel-graphics.key | \
-    gpg --yes --dearmor -o /usr/share/keyrings/intel-graphics.gpg \
- # Add Intel GPU repository (using Ubuntu Noble 'client' repo for latest drivers)
- # The 'client' repo contains the latest rolling release with Battlemage support
- && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics.gpg] https://repositories.intel.com/gpu/ubuntu noble client" \
-    > /etc/apt/sources.list.d/intel-gpu.list \
- && apt-get update \
- # Install media driver and related packages for VAAPI hardware acceleration
- && apt-get install --no-install-recommends --no-install-suggests --yes \
-    intel-media-va-driver-non-free \
-    libmfx-gen1.2 \
-    libvpl2 \
-    libvpl-tools \
-    libva-glx2 \
-    va-driver-all \
+    build-essential \
+    cmake \
+    pkg-config \
+    git \
+    libva-dev \
+    libdrm-dev \
+    libigdgmm-dev \
+    libpciaccess-dev \
     vainfo \
- # Cleanup temporary packages
- && apt-get remove --yes wget \
+ # Clone and build the media driver
+ && cd /tmp \
+ && git clone --depth 1 --branch ${MEDIA_DRIVER_VERSION} https://github.com/intel/media-driver.git \
+ && mkdir -p media-driver/build \
+ && cd media-driver/build \
+ && cmake .. \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_INSTALL_LIBDIR=/usr/lib/x86_64-linux-gnu \
+    -DINSTALL_DRIVER_SYSCONF=OFF \
+    -DMEDIA_BUILD_FATAL_WARNINGS=OFF \
+    -DBUILD_TYPE=Release \
+    -DENABLE_PRODUCTION_KMD=ON \
+ && make -j$(nproc) \
+ && make install \
+ # CRITICAL: Copy driver to jellyfin-ffmpeg's hardcoded path
+ && cp /usr/lib/x86_64-linux-gnu/dri/iHD_drv_video.so /usr/lib/jellyfin-ffmpeg/lib/dri/iHD_drv_video.so \
+ # Cleanup build dependencies and source
+ && cd / \
+ && rm -rf /tmp/media-driver \
+ && apt-get remove --yes \
+    build-essential \
+    cmake \
+    git \
  && apt-get autoremove --yes \
  && apt-get clean autoclean --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
