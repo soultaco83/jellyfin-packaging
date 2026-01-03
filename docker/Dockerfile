@@ -18,10 +18,6 @@ ARG NEO_VER=25.35.35096.9
 ARG IGC1_LEGACY_VER=1.0.17537.24
 ARG NEO_LEGACY_VER=24.35.30872.36
 
-# Intel Media Driver - use master for latest Battlemage support
-# Or pin to a specific tag like: intel-media-25.3.4
-ARG MEDIA_DRIVER_VERSION=master
-
 # https://github.com/tsukumijima/libmali-rockchip
 ARG MALI_PKG_VER=1.9-1_arm64
 ARG MALI_PKG_TAG=v1.9-1-2131373
@@ -121,8 +117,6 @@ ARG NEO_VER
 ARG IGC1_LEGACY_VER
 ARG NEO_LEGACY_VER
 
-ARG MEDIA_DRIVER_VERSION
-
 ARG MALI_PKG_VER
 ARG MALI_PKG_TAG
 ARG MALI_PKG_CFG
@@ -203,45 +197,34 @@ RUN apt-get update \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
 # =============================================================================
-# Intel VAAPI Media Driver - BUILD FROM SOURCE for Battlemage (B570/B580)
-# Version 24.4.4+ required for BMG encoding support
-# Pre-packaged drivers are too old - must build from source
+# Intel Media Stack from vpl-gpu-rt releases (includes media-driver with Battlemage support)
+# Downloads latest MediaStack.tar.gz which contains pre-compiled drivers
+# https://github.com/intel/vpl-gpu-rt/releases
 # =============================================================================
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     apt-get update \
  && apt-get install --no-install-recommends --no-install-suggests --yes \
-    build-essential \
-    cmake \
-    pkg-config \
-    git \
-    libva-dev \
-    libdrm-dev \
-    libigdgmm-dev \
-    libpciaccess-dev \
-    vainfo \
- # Clone and build the media driver
+    curl \
+    jq \
+    tar \
+ # Get the latest release download URL for MediaStack.tar.gz
+ && LATEST_URL=$(curl -s https://api.github.com/repos/intel/vpl-gpu-rt/releases/latest \
+    | jq -r '.assets[] | select(.name == "MediaStack.tar.gz") | .browser_download_url') \
+ && echo "Downloading Intel MediaStack from: ${LATEST_URL}" \
+ && curl -L -o /tmp/MediaStack.tar.gz "${LATEST_URL}" \
+ # Extract and install
  && cd /tmp \
- && git clone --depth 1 --branch ${MEDIA_DRIVER_VERSION} https://github.com/intel/media-driver.git \
- && mkdir -p media-driver/build \
- && cd media-driver/build \
- && cmake .. \
-    -DCMAKE_INSTALL_PREFIX=/usr \
-    -DCMAKE_INSTALL_LIBDIR=/usr/lib/x86_64-linux-gnu \
-    -DINSTALL_DRIVER_SYSCONF=OFF \
-    -DMEDIA_BUILD_FATAL_WARNINGS=OFF \
-    -DBUILD_TYPE=Release \
-    -DENABLE_PRODUCTION_KMD=ON \
- && make -j$(nproc) \
- && make install \
- # CRITICAL: Copy driver to jellyfin-ffmpeg's hardcoded path
+ && tar -xzf MediaStack.tar.gz \
+ && cd MediaStack \
+ # Run the install script (installs to /opt/intel/mediasdk and /usr)
+ && chmod +x install.sh \
+ && ./install.sh \
+ # Copy the iHD driver to jellyfin-ffmpeg's hardcoded path
  && cp /usr/lib/x86_64-linux-gnu/dri/iHD_drv_video.so /usr/lib/jellyfin-ffmpeg/lib/dri/iHD_drv_video.so \
- # Cleanup build dependencies and source
+ # Cleanup
  && cd / \
- && rm -rf /tmp/media-driver \
- && apt-get remove --yes \
-    build-essential \
-    cmake \
-    git \
+ && rm -rf /tmp/MediaStack* \
+ && apt-get remove --yes jq \
  && apt-get autoremove --yes \
  && apt-get clean autoclean --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
