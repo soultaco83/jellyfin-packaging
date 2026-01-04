@@ -217,13 +217,12 @@ RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
  && gzip -d MediaStack.tar.gz \
  && tar -xf MediaStack.tar \
  && cd MediaStack \
- # List contents for debugging (can be removed later)
- && ls -la \
- # Run the install script
- && chmod +x install_media.sh \
- && ./install_media.sh \
+ # Copy all Intel media libraries to system location
+ && cp -r opt/intel /opt/ \
+ # Copy the iHD driver to standard VAAPI location
+ && cp opt/intel/media/lib64/iHD_drv_video.so /usr/lib/x86_64-linux-gnu/dri/iHD_drv_video.so \
  # CRITICAL: Copy the iHD driver to jellyfin-ffmpeg's hardcoded path
- && cp /usr/lib/x86_64-linux-gnu/dri/iHD_drv_video.so /usr/lib/jellyfin-ffmpeg/lib/dri/iHD_drv_video.so \
+ && cp opt/intel/media/lib64/iHD_drv_video.so /usr/lib/jellyfin-ffmpeg/lib/dri/iHD_drv_video.so \
  # Cleanup
  && cd / \
  && rm -rf /tmp/MediaStack* \
