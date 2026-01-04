@@ -9,11 +9,11 @@ ARG OS_VERSION=trixie
 ARG FFMPEG_PACKAGE=jellyfin-ffmpeg7
 
 # https://github.com/intel/compute-runtime/releases
-ARG GMMLIB_VER=22.8.1
-# >= Gen12 graphics (current)
-ARG IGC2_VER=2.18.5
-ARG IGC2_BUILD=19820
-ARG NEO_VER=25.35.35096.9
+ARG GMMLIB_VER=22.8.2
+# >= Gen12 graphics (current) - Battlemage requires these newer versions
+ARG IGC2_VER=2.22.2
+ARG IGC2_BUILD=20121
+ARG NEO_VER=25.44.36015.8
 # <= Gen11 graphics (legacy)
 ARG IGC1_LEGACY_VER=1.0.17537.24
 ARG NEO_LEGACY_VER=24.35.30872.36
@@ -199,7 +199,7 @@ RUN apt-get update \
 # =============================================================================
 # Intel VAAPI Media Driver via MediaStack for Battlemage (B570/B580)
 # Downloads pre-built binaries from Intel's vpl-gpu-rt releases
-# Also installs gmmlib 22.8.2 required for Battlemage
+# Note: gmmlib 22.8.2 is installed later in the OpenCL section
 # =============================================================================
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     apt-get update \
@@ -208,15 +208,6 @@ RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     jq \
     gzip \
     vainfo \
- # Download and install gmmlib 22.8.2 (required for Battlemage - 22.8.0 causes bus error)
- && curl -L -o /tmp/libigdgmm12_22.8.2_amd64.deb \
-    "https://github.com/intel/compute-runtime/releases/download/25.44.36015.8/libigdgmm12_22.8.2_amd64.deb" \
- && dpkg -i /tmp/libigdgmm12_22.8.2_amd64.deb \
- && rm /tmp/libigdgmm12_22.8.2_amd64.deb \
- # Copy the updated gmmlib to jellyfin-ffmpeg's lib path
- && cp /usr/lib/x86_64-linux-gnu/libigdgmm.so.12.8.2 /usr/lib/jellyfin-ffmpeg/lib/libigdgmm.so.12.8.2 \
- && ln -sf libigdgmm.so.12.8.2 /usr/lib/jellyfin-ffmpeg/lib/libigdgmm.so.12 \
- && ln -sf libigdgmm.so.12 /usr/lib/jellyfin-ffmpeg/lib/libigdgmm.so \
  # Get the latest MediaStack release download URL
  && LATEST_URL=$(curl -s https://api.github.com/repos/intel/vpl-gpu-rt/releases/latest \
     | jq -r '.assets[] | select(.name == "MediaStack.tar.gz") | .browser_download_url') \
@@ -245,23 +236,29 @@ ENV LIBVA_DRIVERS_PATH=/usr/lib/x86_64-linux-gnu/dri
 # Intel OpenCL Tone mapping dependencies:
 # Note: This section installs compute runtime for OpenCL-based tone mapping
 # The media driver above handles VAAPI encode/decode
+# Also installs gmmlib 22.8.2 which is required for Battlemage
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     mkdir intel-compute-runtime \
  && cd intel-compute-runtime \
  && curl -LO https://github.com/intel/compute-runtime/releases/download/${NEO_VER}/libigdgmm12_${GMMLIB_VER}_amd64.deb \
-         -LO https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC2_VER}/intel-igc-core-2_${IGC2_VER}+${IGC2_BUILD}_amd64.deb \
-         -LO https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC2_VER}/intel-igc-opencl-2_${IGC2_VER}+${IGC2_BUILD}_amd64.deb \
-         -LO https://github.com/intel/compute-runtime/releases/download/${NEO_VER}/intel-opencl-icd_${NEO_VER}-0_amd64.deb \
-         -LO https://github.com/intel/intel-graphics-compiler/releases/download/igc-${IGC1_LEGACY_VER}/intel-igc-core_${IGC1_LEGACY_VER}_amd64.deb \
-         -LO https://github.com/intel/intel-graphics-compiler/releases/download/igc-${IGC1_LEGACY_VER}/intel-igc-opencl_${IGC1_LEGACY_VER}_amd64.deb \
-         -LO https://github.com/intel/compute-runtime/releases/download/${NEO_LEGACY_VER}/intel-opencl-icd-legacy1_${NEO_LEGACY_VER}_amd64.deb \
+ && curl -LO https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC2_VER}/intel-igc-core-2_${IGC2_VER}+${IGC2_BUILD}_amd64.deb \
+ && curl -LO https://github.com/intel/intel-graphics-compiler/releases/download/v${IGC2_VER}/intel-igc-opencl-2_${IGC2_VER}+${IGC2_BUILD}_amd64.deb \
+ && curl -LO https://github.com/intel/compute-runtime/releases/download/${NEO_VER}/intel-opencl-icd_${NEO_VER}-0_amd64.deb \
+ && curl -LO https://github.com/intel/intel-graphics-compiler/releases/download/igc-${IGC1_LEGACY_VER}/intel-igc-core_${IGC1_LEGACY_VER}_amd64.deb \
+ && curl -LO https://github.com/intel/intel-graphics-compiler/releases/download/igc-${IGC1_LEGACY_VER}/intel-igc-opencl_${IGC1_LEGACY_VER}_amd64.deb \
+ && curl -LO https://github.com/intel/compute-runtime/releases/download/${NEO_LEGACY_VER}/intel-opencl-icd-legacy1_${NEO_LEGACY_VER}_amd64.deb \
+ && apt-get update \
  && apt-get install --no-install-recommends --no-install-suggests -f -y ./*.deb \
  && cd .. \
  && rm -rf intel-compute-runtime \
- ; fi \
+ # Copy gmmlib 22.8.2 to jellyfin-ffmpeg lib path (required for Battlemage)
+ && cp /usr/lib/x86_64-linux-gnu/libigdgmm.so.12.8.2 /usr/lib/jellyfin-ffmpeg/lib/libigdgmm.so.12.8.2 \
+ && ln -sf libigdgmm.so.12.8.2 /usr/lib/jellyfin-ffmpeg/lib/libigdgmm.so.12 \
+ && ln -sf libigdgmm.so.12 /usr/lib/jellyfin-ffmpeg/lib/libigdgmm.so \
  && apt-get clean autoclean --yes \
  && apt-get autoremove --yes \
- && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
+ && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
+ ; fi
 
 # Rockchip RK3588 libmali OpenCL dependencies:
 RUN if test "${PACKAGE_ARCH}" = "arm64"; then \
