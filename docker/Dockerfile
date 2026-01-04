@@ -197,29 +197,32 @@ RUN apt-get update \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
 # =============================================================================
-# Intel Media Stack from vpl-gpu-rt releases (includes media-driver with Battlemage support)
-# Downloads latest MediaStack.tar.gz which contains pre-compiled drivers
-# https://github.com/intel/vpl-gpu-rt/releases
+# Intel VAAPI Media Driver via MediaStack for Battlemage (B570/B580)
+# Downloads pre-built binaries from Intel's vpl-gpu-rt releases
 # =============================================================================
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     apt-get update \
  && apt-get install --no-install-recommends --no-install-suggests --yes \
     curl \
     jq \
-    tar \
+    gzip \
+    vainfo \
  # Get the latest release download URL for MediaStack.tar.gz
  && LATEST_URL=$(curl -s https://api.github.com/repos/intel/vpl-gpu-rt/releases/latest \
     | jq -r '.assets[] | select(.name == "MediaStack.tar.gz") | .browser_download_url') \
  && echo "Downloading Intel MediaStack from: ${LATEST_URL}" \
  && curl -L -o /tmp/MediaStack.tar.gz "${LATEST_URL}" \
- # Extract and install
+ # Extract - it's a double-compressed archive: .tar.gz contains .tar
  && cd /tmp \
- && tar -xzf MediaStack.tar.gz \
+ && gzip -d MediaStack.tar.gz \
+ && tar -xf MediaStack.tar \
  && cd MediaStack \
- # Run the install script (installs to /opt/intel/mediasdk and /usr)
- && chmod +x install.sh \
- && ./install.sh \
- # Copy the iHD driver to jellyfin-ffmpeg's hardcoded path
+ # List contents for debugging (can be removed later)
+ && ls -la \
+ # Run the install script
+ && chmod +x install_media.sh \
+ && ./install_media.sh \
+ # CRITICAL: Copy the iHD driver to jellyfin-ffmpeg's hardcoded path
  && cp /usr/lib/x86_64-linux-gnu/dri/iHD_drv_video.so /usr/lib/jellyfin-ffmpeg/lib/dri/iHD_drv_video.so \
  # Cleanup
  && cd / \
