@@ -199,6 +199,7 @@ RUN apt-get update \
 # =============================================================================
 # Intel VAAPI Media Driver via MediaStack for Battlemage (B570/B580)
 # Downloads pre-built binaries from Intel's vpl-gpu-rt releases
+# Also installs gmmlib 22.8.2 required for Battlemage
 # =============================================================================
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     apt-get update \
@@ -207,7 +208,16 @@ RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     jq \
     gzip \
     vainfo \
- # Get the latest release download URL for MediaStack.tar.gz
+ # Download and install gmmlib 22.8.2 (required for Battlemage - 22.8.0 causes bus error)
+ && curl -L -o /tmp/libigdgmm12_22.8.2_amd64.deb \
+    "https://github.com/intel/compute-runtime/releases/download/25.44.36015.8/libigdgmm12_22.8.2_amd64.deb" \
+ && dpkg -i /tmp/libigdgmm12_22.8.2_amd64.deb \
+ && rm /tmp/libigdgmm12_22.8.2_amd64.deb \
+ # Copy the updated gmmlib to jellyfin-ffmpeg's lib path
+ && cp /usr/lib/x86_64-linux-gnu/libigdgmm.so.12.8.2 /usr/lib/jellyfin-ffmpeg/lib/libigdgmm.so.12.8.2 \
+ && ln -sf libigdgmm.so.12.8.2 /usr/lib/jellyfin-ffmpeg/lib/libigdgmm.so.12 \
+ && ln -sf libigdgmm.so.12 /usr/lib/jellyfin-ffmpeg/lib/libigdgmm.so \
+ # Get the latest MediaStack release download URL
  && LATEST_URL=$(curl -s https://api.github.com/repos/intel/vpl-gpu-rt/releases/latest \
     | jq -r '.assets[] | select(.name == "MediaStack.tar.gz") | .browser_download_url') \
  && echo "Downloading Intel MediaStack from: ${LATEST_URL}" \
@@ -217,8 +227,8 @@ RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
  && gzip -d MediaStack.tar.gz \
  && tar -xf MediaStack.tar \
  && cd MediaStack \
- # Copy the iHD driver to jellyfin-ffmpeg's hardcoded path
- && cp opt/intel/media/lib64/iHD_drv_video.so /usr/lib/jellyfin-ffmpeg/lib/dri/iHD_drv_video.so \
+ # Copy the iHD driver to jellyfin-ffmpeg's dri path
+ && cp -v opt/intel/media/lib64/iHD_drv_video.so /usr/lib/jellyfin-ffmpeg/lib/dri/iHD_drv_video.so \
  # Cleanup
  && cd / \
  && rm -rf /tmp/MediaStack* \
