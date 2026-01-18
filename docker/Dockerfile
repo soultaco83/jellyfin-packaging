@@ -200,16 +200,15 @@ RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
  && apt-get install --no-install-recommends --no-install-suggests --yes \
     curl \
     jq \
-    gzip \
     vainfo \
  # Get the latest MediaStack release download URL
  && LATEST_URL=$(curl -s https://api.github.com/repos/intel/vpl-gpu-rt/releases/latest \
     | jq -r '.assets[] | select(.name == "MediaStack.tar.gz") | .browser_download_url') \
  && echo "Downloading Intel MediaStack from: ${LATEST_URL}" \
  && curl -L -o /tmp/MediaStack.tar.gz "${LATEST_URL}" \
- # Extract - it's a double-compressed archive: .tar.gz contains .tar
+ # Extract - tar can handle .tar.gz directly, but this is double-compressed
  && cd /tmp \
- && gzip -d MediaStack.tar.gz \
+ && tar -xzf MediaStack.tar.gz \
  && tar -xf MediaStack.tar \
  && cd MediaStack \
  # Copy the iHD driver to jellyfin-ffmpeg's dri path
@@ -217,7 +216,7 @@ RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
  # Cleanup
  && cd / \
  && rm -rf /tmp/MediaStack* \
- && apt-get remove --yes jq gzip vainfo \
+ && apt-get remove --yes jq vainfo \
  && apt-get autoremove --yes \
  && apt-get clean autoclean --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
