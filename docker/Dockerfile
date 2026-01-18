@@ -95,7 +95,6 @@ RUN apt-get update \
     curl \
     ca-certificates \
     libicu76 \
-    python3 \
  && curl -fsSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel ${DOTNET_VERSION} --install-dir /usr/local/bin
 
 RUN dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFIG} \
@@ -161,14 +160,10 @@ ENV NVIDIA_DRIVER_CAPABILITIES="compute,video,utility"
 
 # Install dependencies:
 RUN apt-get update \
- && apt-get upgrade -y \
  && apt-get install --no-install-recommends --no-install-suggests --yes \
     ca-certificates \
     gnupg \
     curl \
-    apt-transport-https \
-    zip \
-    unzip \
  && curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key \
   | gpg --dearmor -o /etc/apt/keyrings/jellyfin.gpg \
  && cat <<EOF > /etc/apt/sources.list.d/jellyfin.sources
@@ -189,9 +184,8 @@ RUN apt-get update \
     libfontconfig1 \
     libfreetype6 \
     libjemalloc2 \
-    python3 \
  && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen \
- && apt-get remove gnupg apt-transport-https --yes \
+ && apt-get remove gnupg --yes \
  && apt-get clean autoclean --yes \
  && apt-get autoremove --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
@@ -223,7 +217,7 @@ RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
  # Cleanup
  && cd / \
  && rm -rf /tmp/MediaStack* \
- && apt-get remove --yes jq \
+ && apt-get remove --yes jq gzip vainfo \
  && apt-get autoremove --yes \
  && apt-get clean autoclean --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
@@ -287,19 +281,12 @@ RUN MEILI_ARCH="" \
         echo "WARNING: Meilisearch not available for architecture ${PACKAGE_ARCH}" \
      ; fi
 
-# Add fonts for east asian languages rendering
-RUN apt update --yes \
- && apt install --no-install-recommends --no-install-suggests --yes \
-        fonts-wqy-zenhei \
-        fonts-wqy-microhei \
-        fonts-arphic-ukai \
-        fonts-arphic-uming \
-        fonts-noto-cjk \
-        fonts-ipafont-mincho \
-        fonts-ipafont-gothic \
-        fonts-unfonts-core \
- && apt clean autoclean --yes \
- && apt autoremove --yes \
+# Add fonts for English and East Asian subtitle rendering
+RUN apt-get update --yes \
+ && apt-get install --no-install-recommends --no-install-suggests --yes \
+    fonts-noto-cjk-extra \
+ && apt-get clean autoclean --yes \
+ && apt-get autoremove --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 
 # Setup jemalloc: link the library to a path owned by us to handle arch specific library paths
@@ -331,22 +318,21 @@ COPY --from=web /web /jellyfin/jellyfin-web
 
 RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
 
-# Download plugins (Python script - no dotnet needed)
+# Download plugins (Python script - install python3, use it, then remove it)
 COPY docker/download-plugins-manifest.py /tmp/download-plugins.py
-RUN python3 /tmp/download-plugins.py "/jellyfin/plugins" \
+RUN apt-get update \
+ && apt-get install --no-install-recommends --no-install-suggests --yes python3 \
+ && python3 /tmp/download-plugins.py "/jellyfin/plugins" \
+ && apt-get remove --yes python3 \
+ && apt-get autoremove --yes \
+ && apt-get clean autoclean --yes \
+ && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
  && rm /tmp/download-plugins.py
 
 # Copy entrypoint and scheduled task
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 COPY docker/meilisearch-scheduled-task.js /usr/share/jellyfin/scheduled-tasks/c75bc4c1-e1c5-1364-0532-019143c0fb27.js
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-# Final cleanup - remove packages only needed during build
-RUN apt-get update \
- && apt-get remove -y unzip \
- && apt-get autoremove -y \
- && apt-get clean \
- && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 ARG JELLYFIN_VERSION
 LABEL "org.opencontainers.image.source"="https://github.com/soultaco83/jellyfin-packaging"
