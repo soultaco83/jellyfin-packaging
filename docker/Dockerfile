@@ -200,6 +200,7 @@ RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
  && apt-get install --no-install-recommends --no-install-suggests --yes \
     curl \
     jq \
+    gzip \
     vainfo \
  # Get the latest MediaStack release download URL
  && LATEST_URL=$(curl -s https://api.github.com/repos/intel/vpl-gpu-rt/releases/latest \
@@ -207,16 +208,16 @@ RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
  && echo "Downloading Intel MediaStack from: ${LATEST_URL}" \
  && curl -L -o /tmp/MediaStack.tar.gz "${LATEST_URL}" \
  # Extract - it's a double-compressed archive: .tar.gz contains .tar
- && mkdir -p /tmp/mediastack-extract \
- && cd /tmp/mediastack-extract \
- && tar -xzf /tmp/MediaStack.tar.gz \
+ && cd /tmp \
+ && gzip -d MediaStack.tar.gz \
  && tar -xf MediaStack.tar \
+ && cd MediaStack \
  # Copy the iHD driver to jellyfin-ffmpeg's dri path
- && cp -v MediaStack/opt/intel/media/lib64/iHD_drv_video.so /usr/lib/jellyfin-ffmpeg/lib/dri/iHD_drv_video.so \
+ && cp -v opt/intel/media/lib64/iHD_drv_video.so /usr/lib/jellyfin-ffmpeg/lib/dri/iHD_drv_video.so \
  # Cleanup
  && cd / \
- && rm -rf /tmp/MediaStack* /tmp/mediastack-extract \
- && apt-get remove --yes jq vainfo \
+ && rm -rf /tmp/MediaStack* \
+ && apt-get remove --yes jq \
  && apt-get autoremove --yes \
  && apt-get clean autoclean --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
