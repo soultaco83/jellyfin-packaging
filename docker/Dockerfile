@@ -1,5 +1,5 @@
 # Docker build arguments
-ARG DOTNET_VERSION=9.0
+ARG DOTNET_VERSION=8.0
 ARG NODEJS_VERSION=24
 
 # Combined image version (Debian)
