@@ -1,7 +1,7 @@
 [submodule "jellyfin-server"]
 	path = jellyfin-server
-	url = https://github.com/soultaco83/jellyfin-server-unstable
+	url = http://10.10.10.220:3000/soultaco83/jellyfin-server-unstable.git
 
 [submodule "jellyfin-web"]
 	path = jellyfin-web
-	url = https://github.com/soultaco83/jellyfin-web-unstable
+	url = http://10.10.10.220:3000/soultaco83/jellyfin-web-unstable.git

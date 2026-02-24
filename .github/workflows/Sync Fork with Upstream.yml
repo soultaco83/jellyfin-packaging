@@ -2,33 +2,41 @@ name: Sync Fork with Upstream
 
 on:
   schedule:
-    - cron: '0 1 * * *'  # Runs at midnight EST every day
-  workflow_dispatch:      # Allows manual trigger
+    - cron: '0 1 * * *'  # Runs at 1am UTC every day
+  workflow_dispatch:
+
+env:
+  FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN || github.token }}
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+          token: ${{ env.FORGEJO_TOKEN }}
+          persist-credentials: true
+
       - name: Configure Git
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          
-      - name: Add upstream repository
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+
+      - name: Add upstream remote
         run: |
-          git remote add upstream https://github.com/jellyfin/jellyfin-packaging.git
-          
+          git remote add upstream https://github.com/jellyfin/jellyfin-packaging.git || \
+          git remote set-url upstream https://github.com/jellyfin/jellyfin-packaging.git
+
+          git remote set-url origin http://x-access-token:${FORGEJO_TOKEN}@10.10.10.220:3000/soultaco83/jellyfin-packaging.git
+
       - name: Fetch all
         run: |
           git fetch origin
           git fetch upstream
-          
+
       - name: Sync with upstream
         id: sync
         continue-on-error: true
@@ -39,14 +47,16 @@ jobs:
             echo "MERGE_FAILED=true" >> $GITHUB_ENV
             exit 1
           fi
+
       - name: Push changes
         if: steps.sync.outcome == 'success'
         run: git push origin master
 
       - name: Send Discord notification on failure
-        if: env.MERGE_FAILED == 'true'
-        uses: Ilshidur/action-discord@master
+        if: env.MERGE_FAILED == 'true' && env.DISCORD_WEBHOOK != ''
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        with:
-          args: '🚨 Merge failed in jellyfin-packaging fork sync! Manual intervention required.'
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d '{"content": "🚨 Merge failed in jellyfin-packaging fork sync! Manual intervention required."}' \
+            "$DISCORD_WEBHOOK"
