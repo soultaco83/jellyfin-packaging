@@ -39,7 +39,7 @@ jobs:
           
       - name: "Install Python dependencies"
         run: |
-          pip install GitPython PyYAML
+          pip install --break-system-packages GitPython PyYAML
           
       - name: "Initialize and update submodules"
         run: |
@@ -121,7 +121,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes python3-yaml
-          pip install GitPython
+          pip install --break-system-packages GitPython
           
       - name: "Set permissions for docker-entrypoint.sh"
         run: |
