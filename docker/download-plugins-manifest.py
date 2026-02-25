@@ -17,15 +17,18 @@ from pathlib import Path
 MANIFEST_URL = "https://www.iamparadox.dev/jellyfin/plugins/manifest.json"
 MEILISEARCH_MANIFEST_URL = "https://raw.githubusercontent.com/arnesacnussem/jellyfin-plugin-meilisearch/refs/heads/master/manifest.json"
 
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; wget/1.21)"}
+
 def download_manifest(url, name="manifest"):
     """Download and parse a manifest.json file"""
     print(f"=== Downloading {name} ===")
     print(f"URL: {url}")
     print()
-    
+
     try:
         print(f"Fetching {name}...")
-        with urllib.request.urlopen(url) as response:
+        req = urllib.request.Request(url, headers=HEADERS)
+        with urllib.request.urlopen(req) as response:
             manifest = json.loads(response.read())
         print(f"✓ {name} downloaded")
         print()
@@ -75,7 +78,8 @@ def get_highest_version(manifest, guid, plugin_name):
 def download_file(url, dest_path):
     """Download a file from URL to destination path"""
     try:
-        with urllib.request.urlopen(url) as response:
+        req = urllib.request.Request(url, headers=HEADERS)
+        with urllib.request.urlopen(req) as response:
             with open(dest_path, 'wb') as out_file:
                 out_file.write(response.read())
         return True
@@ -354,24 +358,24 @@ def main():
     # Download main manifest
     manifest = download_manifest(MANIFEST_URL, "IAmParadox manifest")
     if not manifest:
-        print("✗ Cannot proceed without manifest")
-        sys.exit(1)
-    
+        print("⚠ IAmParadox manifest unavailable — skipping FileTransformation and PluginPages")
+
     # Install plugins
     success_count = 0
     fail_count = 0
-    
+
     # Plugins from IAmParadox manifest (CustomTabs removed - using soultaco83 repo instead)
-    plugins = [
-        ("FileTransformation", "5e87cc92-571a-4d8d-8d98-d2d4147f9f90"),
-        ("PluginPages", "5b6550fa-a014-4f4c-8a2c-59a43680ac6d")
-    ]
-    
-    for plugin_name, guid in plugins:
-        if install_plugin(manifest, plugin_name, guid, plugin_dir):
-            success_count += 1
-        else:
-            fail_count += 1
+    if manifest:
+        plugins = [
+            ("FileTransformation", "5e87cc92-571a-4d8d-8d98-d2d4147f9f90"),
+            ("PluginPages", "5b6550fa-a014-4f4c-8a2c-59a43680ac6d")
+        ]
+
+        for plugin_name, guid in plugins:
+            if install_plugin(manifest, plugin_name, guid, plugin_dir):
+                success_count += 1
+            else:
+                fail_count += 1
     
     # Install CustomTabs from soultaco83 repo (master branch compatible)
     if install_customtabs_plugin(plugin_dir):
