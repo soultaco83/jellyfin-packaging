@@ -8,6 +8,9 @@ ARG OS_VERSION=trixie
 # Jellyfin FFMPEG package
 ARG FFMPEG_PACKAGE=jellyfin-ffmpeg7
 
+# https://github.com/intel/vpl-gpu-rt/releases
+ARG VPL_GPU_RT_VER=intel-onevpl-25.3.4
+
 # https://github.com/intel/compute-runtime/releases
 ARG GMMLIB_VER=22.8.2
 # >= Gen12 graphics (current) - Battlemage requires these newer versions
@@ -199,14 +202,9 @@ RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     apt-get update \
  && apt-get install --no-install-recommends --no-install-suggests --yes \
     curl \
-    jq \
     gzip \
     vainfo \
- # Get the latest MediaStack release download URL
- && LATEST_URL=$(curl -s https://api.github.com/repos/intel/vpl-gpu-rt/releases/latest \
-    | jq -r '.assets[] | select(.name == "MediaStack.tar.gz") | .browser_download_url') \
- && echo "Downloading Intel MediaStack from: ${LATEST_URL}" \
- && curl -L -o /tmp/MediaStack.tar.gz "${LATEST_URL}" \
+ && curl -L -o /tmp/MediaStack.tar.gz "https://github.com/intel/vpl-gpu-rt/releases/download/${VPL_GPU_RT_VER}/MediaStack.tar.gz" \
  # Extract - it's a double-compressed archive: .tar.gz contains .tar
  && cd /tmp \
  && gzip -d MediaStack.tar.gz \
@@ -217,9 +215,8 @@ RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
  # Cleanup
  && cd / \
  && rm -rf /tmp/MediaStack* \
- && apt-get remove --yes jq \
- && apt-get autoremove --yes \
  && apt-get clean autoclean --yes \
+ && apt-get autoremove --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
  ; fi
 
