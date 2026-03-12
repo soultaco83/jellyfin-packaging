@@ -15,7 +15,6 @@ import glob
 from pathlib import Path
 
 MANIFEST_URL = "https://www.iamparadox.dev/jellyfin/plugins/manifest.json"
-MEILISEARCH_MANIFEST_URL = "https://raw.githubusercontent.com/arnesacnussem/jellyfin-plugin-meilisearch/refs/heads/master/manifest.json"
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; wget/1.21)"}
 
@@ -171,7 +170,6 @@ def install_plugin(manifest, plugin_name, guid, plugin_dir, env_var_name=None):
                 "CustomTabs": "CUSTOMTABS_VERSION",
                 "Enhanced": "ENHANCED_VERSION",
                 "PluginPages": "PLUGINPAGES_VERSION",
-                "Meilisearch": "MEILISEARCH_PLUGIN_VERSION"
             }
             env_var_name = var_name_map.get(plugin_name, f"{plugin_name.upper()}_VERSION")
         
@@ -330,22 +328,6 @@ def install_enhanced_plugin(plugin_dir):
         print(f"  ✗ Failed to install Enhanced: {e}")
         return False
 
-def install_meilisearch_plugin(plugin_dir):
-    """Install Meilisearch plugin from arnesacnussem repo"""
-    print()
-    print("=== Installing Meilisearch Plugin ===")
-    print("  Note: Meilisearch plugin is from arnesacnussem repo")
-    
-    manifest = download_manifest(MEILISEARCH_MANIFEST_URL, "Meilisearch manifest")
-    if not manifest:
-        print("  ✗ Failed to download Meilisearch manifest")
-        return False
-    
-    # Meilisearch plugin GUID
-    guid = "974395db-b31d-46a2-bc86-ef9aa5ac04dd"
-    
-    return install_plugin(manifest, "Meilisearch", guid, plugin_dir, "MEILISEARCH_PLUGIN_VERSION")
-
 def main():
     # Get plugin directory from command line or use default
     plugin_dir = sys.argv[1] if len(sys.argv) > 1 else "/jellyfin/plugins"
@@ -388,13 +370,7 @@ def main():
         success_count += 1
     else:
         fail_count += 1
-    
-    # Install Meilisearch plugin (different manifest)
-    if install_meilisearch_plugin(plugin_dir):
-        success_count += 1
-    else:
-        fail_count += 1
-    
+
     # Summary
     print()
     print("=== Installation Summary ===")

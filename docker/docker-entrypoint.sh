@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-# Global variables
-MEILI_PID=""
-
 # Create a marker file to detect container recreation and version changes
 CONTAINER_MARKER="/config/.container_marker"
 DOCKER_BUILD_FILE="/config/.last_docker_build"
@@ -169,7 +166,6 @@ setup_plugins() {
     local customtabs_version=$(grep -oP 'CUSTOMTABS_VERSION=\K.*' /etc/environment 2>/dev/null)
     local filetrans_version=$(grep -oP 'FILETRANS_VERSION=\K.*' /etc/environment 2>/dev/null)
     local enhanced_version=$(grep -oP 'ENHANCED_VERSION=\K.*' /etc/environment 2>/dev/null)
-    local meilisearch_version=$(grep -oP 'MEILISEARCH_PLUGIN_VERSION=\K.*' /etc/environment 2>/dev/null)
 
     local all_success=true
 
@@ -296,47 +292,6 @@ setup_plugins() {
         fi
     fi
 
-    # Install Meilisearch plugin (only if needed or if newer)
-    if [ -n "$meilisearch_version" ]; then
-        local source_dir="/jellyfin/plugins/Meilisearch_${meilisearch_version}"
-        local target_dir="/config/plugins/Meilisearch_${meilisearch_version}"
-        local installed_version=$(get_installed_version "Meilisearch")
-        
-        if [ -n "$installed_version" ]; then
-            if version_gt "$meilisearch_version" "$installed_version"; then
-                echo "$(date '+%H:%M:%S') - Newer Meilisearch plugin version available ($meilisearch_version > $installed_version), updating..."
-                # Clean old versions
-                rm -rf /config/plugins/Meilisearch_* 2>/dev/null || true
-                
-                if [ -d "$source_dir" ]; then
-                    mkdir -p "${target_dir}"
-                    cp -r "${source_dir}"/* "${target_dir}/"
-                    chmod -R 755 "${target_dir}"
-                    validate_meta_json "${target_dir}"
-                    echo "$(date '+%H:%M:%S') - Meilisearch plugin updated to version $meilisearch_version"
-                else
-                    echo "$(date '+%H:%M:%S') - Warning: Meilisearch plugin source not found at $source_dir"
-                    all_success=false
-                fi
-            else
-                echo "$(date '+%H:%M:%S') - Meilisearch plugin version $installed_version already installed (>= $meilisearch_version), skipping..."
-            fi
-        else
-            echo "$(date '+%H:%M:%S') - Installing Meilisearch plugin version: $meilisearch_version"
-            
-            if [ -d "$source_dir" ]; then
-                mkdir -p "${target_dir}"
-                cp -r "${source_dir}"/* "${target_dir}/"
-                chmod -R 755 "${target_dir}"
-                validate_meta_json "${target_dir}"
-                echo "$(date '+%H:%M:%S') - Meilisearch plugin installed successfully"
-            else
-                echo "$(date '+%H:%M:%S') - Warning: Meilisearch plugin not found at $source_dir"
-                all_success=false
-            fi
-        fi
-    fi
-
     if [ "$all_success" = false ]; then
         echo "$(date '+%H:%M:%S') - Warning: Some plugins failed to install. Container will continue but plugins may not work."
         return 1
@@ -383,15 +338,6 @@ update_plugin_repositories() {
         echo "$(date '+%H:%M:%S') - IAmParadox plugin repository already exists, skipping..."
     fi
 
-    # Add Meilisearch plugin repository if not present
-    local meilisearch_repo_url="https://raw.githubusercontent.com/arnesacnussem/jellyfin-plugin-meilisearch/refs/heads/master/manifest.json"
-    if ! grep -qF "$meilisearch_repo_url" "$system_xml"; then
-        echo "$(date '+%H:%M:%S') - Adding Meilisearch plugin repository"
-        sed -i 's|  </PluginRepositories>|    <RepositoryInfo>\n      <Name>Meilisearch Plugin</Name>\n      <Url>'"$meilisearch_repo_url"'</Url>\n      <Enabled>true</Enabled>\n    </RepositoryInfo>\n  </PluginRepositories>|' "$system_xml"
-    else
-        echo "$(date '+%H:%M:%S') - Meilisearch plugin repository already exists, skipping..."
-    fi
-
     echo "$(date '+%H:%M:%S') - Plugin repositories configured"
 }
 
@@ -427,158 +373,9 @@ apply_temp_fixes() {
     mkdir -p /tmp/jellyfin
 }
 
-# Function to disable Meilisearch plugin
-disable_meilisearch_plugin() {
-    echo "$(date '+%H:%M:%S') - Disabling Meilisearch plugin..."
-    
-    # Find Meilisearch plugin directory
-    local plugin_dir=$(find /config/plugins -maxdepth 1 -type d -name "Meilisearch_*" 2>/dev/null | head -n1)
-    
-    if [ -z "$plugin_dir" ]; then
-        echo "$(date '+%H:%M:%S') - Meilisearch plugin not found in /config/plugins, skipping disable"
-        return 0
-    fi
-    
-    local meta_file="${plugin_dir}/meta.json"
-    
-    if [ ! -f "$meta_file" ]; then
-        echo "$(date '+%H:%M:%S') - meta.json not found in $plugin_dir, skipping disable"
-        return 0
-    fi
-    
-    # Update status from Active to Disabled
-    if python3 -c "
-import json
-with open('$meta_file', 'r') as f:
-    data = json.load(f)
-data['status'] = 'Disabled'
-with open('$meta_file', 'w') as f:
-    json.dump(data, f, indent=2)
-print('OK')
-" 2>/dev/null | grep -q "OK"; then
-        echo "$(date '+%H:%M:%S') - Meilisearch plugin disabled successfully"
-    else
-        echo "$(date '+%H:%M:%S') - Warning: Failed to disable Meilisearch plugin"
-    fi
-}
-
-# Function to start Meilisearch
-start_meilisearch() {
-    echo "$(date '+%H:%M:%S') - Starting Meilisearch..."
-    
-    # Check if Meilisearch binary exists
-    if [ ! -x /usr/local/bin/meilisearch ]; then
-        echo "$(date '+%H:%M:%S') - WARNING: Meilisearch binary not found, skipping Meilisearch startup"
-        disable_meilisearch_plugin
-        return 0  # Return success so container doesn't fail
-    fi
-    
-    # Create Meilisearch data and log directories
-    mkdir -p "${MEILI_DB_PATH:-/config/meilisearch/data}"
-    mkdir -p /config/log
-    mkdir -p /config/ScheduledTasks
-    
-    # Copy Meilisearch scheduled task if it doesn't exist
-    local task_file="/config/ScheduledTasks/c75bc4c1-e1c5-1364-0532-019143c0fb27.js"
-    local task_source="/usr/share/jellyfin/scheduled-tasks/c75bc4c1-e1c5-1364-0532-019143c0fb27.js"
-    if [ ! -f "$task_file" ] && [ -f "$task_source" ]; then
-        cp "$task_source" "$task_file"
-        echo "$(date '+%H:%M:%S') - Installed Meilisearch scheduled task (weekly indexing on Sunday)"
-    fi
-    
-    # Test the binary first
-    echo "$(date '+%H:%M:%S') - Testing Meilisearch binary..."
-    if ! /usr/local/bin/meilisearch --version > /config/log/meilisearch.log 2>&1; then
-        echo "$(date '+%H:%M:%S') - WARNING: Meilisearch binary test failed. Error output:"
-        cat /config/log/meilisearch.log
-        echo "$(date '+%H:%M:%S') - Continuing without Meilisearch..."
-        disable_meilisearch_plugin
-        return 0  # Return success so container doesn't fail
-    fi
-    echo "$(date '+%H:%M:%S') - Meilisearch binary OK: $(cat /config/log/meilisearch.log)"
-    
-    # Clear log for fresh start
-    > /config/log/meilisearch.log
-    
-    # Start Meilisearch in background with full error capture
-    echo "$(date '+%H:%M:%S') - Launching Meilisearch daemon..."
-    
-    # Check if we have a master key configured or stored
-    local key_file="/config/meilisearch/.master_key"
-    MEILI_MASTER_KEY="${MEILI_MASTER_KEY:-}"
-    
-    if [ -z "$MEILI_MASTER_KEY" ]; then
-        # Check if we have a previously generated key
-        if [ -f "$key_file" ]; then
-            MEILI_MASTER_KEY=$(cat "$key_file")
-            echo "$(date '+%H:%M:%S') - Using stored Meilisearch master key"
-        else
-            # Generate a new key and store it
-            MEILI_MASTER_KEY=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 32)
-            echo "$MEILI_MASTER_KEY" > "$key_file"
-            chmod 600 "$key_file"
-            echo "$(date '+%H:%M:%S') - Generated new Meilisearch master key"
-        fi
-    fi
-    
-    # Export the key so the Meilisearch plugin can use it
-    export MEILI_MASTER_KEY
-    
-    /usr/local/bin/meilisearch \
-        --db-path "${MEILI_DB_PATH:-/config/meilisearch/data}" \
-        --http-addr 127.0.0.1:7700 \
-        --env "${MEILI_ENV:-production}" \
-        --master-key "$MEILI_MASTER_KEY" \
-        --no-analytics \
-        >> /config/log/meilisearch.log 2>&1 &
-    MEILI_PID=$!
-    
-    echo "$(date '+%H:%M:%S') - Meilisearch started with PID: $MEILI_PID"
-    
-    # Wait for Meilisearch to be ready
-    local max_attempts=30
-    local attempt=0
-    while [ $attempt -lt $max_attempts ]; do
-        # Check if process is still running
-        if ! kill -0 "$MEILI_PID" 2>/dev/null; then
-            echo "$(date '+%H:%M:%S') - WARNING: Meilisearch process died. Log output:"
-            cat /config/log/meilisearch.log
-            echo "$(date '+%H:%M:%S') - Continuing without Meilisearch..."
-            MEILI_PID=""
-            disable_meilisearch_plugin
-            return 0  # Return success so container doesn't fail
-        fi
-        
-        if curl -sf http://127.0.0.1:7700/health > /dev/null 2>&1; then
-            echo "$(date '+%H:%M:%S') - Meilisearch is ready (PID: $MEILI_PID)"
-            return 0
-        fi
-        attempt=$((attempt + 1))
-        sleep 1
-    done
-    
-    echo "$(date '+%H:%M:%S') - WARNING: Meilisearch failed to respond within ${max_attempts} seconds"
-    echo "$(date '+%H:%M:%S') - Meilisearch log output:"
-    cat /config/log/meilisearch.log
-    echo "$(date '+%H:%M:%S') - Continuing without Meilisearch..."
-    disable_meilisearch_plugin
-    return 0  # Return success so container doesn't fail
-}
-
-# Function to stop Meilisearch gracefully
-stop_meilisearch() {
-    if [ -n "$MEILI_PID" ] && kill -0 "$MEILI_PID" 2>/dev/null; then
-        echo "$(date '+%H:%M:%S') - Stopping Meilisearch (PID: $MEILI_PID)..."
-        kill -TERM "$MEILI_PID" 2>/dev/null || true
-        wait "$MEILI_PID" 2>/dev/null || true
-        echo "$(date '+%H:%M:%S') - Meilisearch stopped"
-    fi
-}
-
 # Trap to handle container shutdown
 cleanup() {
     echo "$(date '+%H:%M:%S') - Received shutdown signal, cleaning up..."
-    stop_meilisearch
     exit 0
 }
 
@@ -634,7 +431,7 @@ if [ "$backup_needed" = true ]; then
     echo "$(date '+%H:%M:%S') - Performing critical backups..."
     perform_db_backup "$backup_reason"
     perform_config_backup
-    
+
     # Update build signature
     echo "$CURRENT_BUILD_TIME" > "$DOCKER_BUILD_FILE"
     echo "$(date '+%H:%M:%S') - Critical backups completed"
@@ -642,9 +439,6 @@ fi
 
 # Wait for all background operations to complete
 wait
-
-# Start Meilisearch before Jellyfin
-start_meilisearch
 
 # Update marker file
 touch "$CONTAINER_MARKER"
