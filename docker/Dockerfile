@@ -102,6 +102,29 @@ RUN dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFI
     -p:DebugSymbols=false -p:DebugType=none
 
 #
+# Build the FileTransformation plugin from source
+#
+FROM debian:${OS_VERSION}-slim AS plugin
+
+ARG SOURCE_DIR=/src
+ARG ARTIFACT_DIR=/plugin
+
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
+
+RUN apt-get update \
+ && apt-get install --no-install-recommends --no-install-suggests --yes \
+    curl \
+    ca-certificates \
+    git \
+    libicu76 \
+ && curl -fsSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 9.0 --install-dir /usr/local/bin \
+ && git clone http://10.10.10.220:3000/soultaco83/jellyfin-plugin-file-transformation.git ${SOURCE_DIR}
+
+RUN dotnet publish ${SOURCE_DIR}/src/Jellyfin.Plugin.FileTransformation/Jellyfin.Plugin.FileTransformation.csproj \
+    --configuration Release \
+    --output ${ARTIFACT_DIR}
+
+#
 # Build the final combined image
 #
 FROM --platform=linux/${TARGET_ARCH} debian:${OS_VERSION}-slim AS combined
@@ -289,6 +312,11 @@ COPY --from=server /server /jellyfin
 COPY --from=web /web /jellyfin/jellyfin-web
 
 RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
+
+# Install FileTransformation plugin built from source
+COPY --from=plugin /plugin /jellyfin/plugins/FileTransformation_2.5.0.0
+RUN printf '{"category":"General","changelog":"Remove UsePathTrim - not present in current Jellyfin server","description":"Jellyfin plugin to allow other plugin developers to intercept and change the delivered web content of jellyfin-web without requiring custom jellyfin-web builds.","guid":"5e87cc92-571a-4d8d-8d98-d2d4147f9f90","name":"FileTransformation","overview":"Web file transformation for plugin developers.","owner":"IAmParadox27","targetAbi":"10.11.0.0","timestamp":"","version":"2.5.0.0","status":"Active","autoUpdate":false,"imagePath":"","assemblies":[]}' \
+    > /jellyfin/plugins/FileTransformation_2.5.0.0/meta.json
 
 # Download plugins (Python script - install python3, use it, then remove it)
 COPY docker/download-plugins-manifest.py /tmp/download-plugins.py

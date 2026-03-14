@@ -347,9 +347,9 @@ def main():
     fail_count = 0
 
     # Plugins from IAmParadox manifest (CustomTabs removed - using soultaco83 repo instead)
+    # FileTransformation removed - built from source in Dockerfile from soultaco83 Forgejo repo
     if manifest:
         plugins = [
-            ("FileTransformation", "5e87cc92-571a-4d8d-8d98-d2d4147f9f90"),
             ("PluginPages", "5b6550fa-a014-4f4c-8a2c-59a43680ac6d")
         ]
 
