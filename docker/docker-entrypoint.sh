@@ -166,6 +166,7 @@ setup_plugins() {
     local customtabs_version=$(grep -oP 'CUSTOMTABS_VERSION=\K.*' /etc/environment 2>/dev/null)
     local filetrans_version=$(grep -oP 'FILETRANS_VERSION=\K.*' /etc/environment 2>/dev/null)
     local enhanced_version=$(grep -oP 'ENHANCED_VERSION=\K.*' /etc/environment 2>/dev/null)
+    local pluginpages_version=$(grep -oP 'PLUGINPAGES_VERSION=\K.*' /etc/environment 2>/dev/null)
 
     local all_success=true
 
@@ -246,6 +247,46 @@ setup_plugins() {
                 echo "$(date '+%H:%M:%S') - FileTransformation plugin installed successfully"
             else
                 echo "$(date '+%H:%M:%S') - Warning: FileTransformation plugin not found at $source_dir"
+                all_success=false
+            fi
+        fi
+    fi
+
+    # Install PluginPages (only if needed or if newer)
+    if [ -n "$pluginpages_version" ]; then
+        local source_dir="/jellyfin/plugins/PluginPages_${pluginpages_version}"
+        local target_dir="/config/plugins/PluginPages_${pluginpages_version}"
+        local installed_version=$(get_installed_version "PluginPages")
+
+        if [ -n "$installed_version" ]; then
+            if version_gt "$pluginpages_version" "$installed_version"; then
+                echo "$(date '+%H:%M:%S') - Newer PluginPages version available ($pluginpages_version > $installed_version), updating..."
+                rm -rf /config/plugins/PluginPages_* 2>/dev/null || true
+
+                if [ -d "$source_dir" ]; then
+                    mkdir -p "${target_dir}"
+                    cp -r "${source_dir}"/* "${target_dir}/"
+                    chmod -R 755 "${target_dir}"
+                    validate_meta_json "${target_dir}"
+                    echo "$(date '+%H:%M:%S') - PluginPages plugin updated to version $pluginpages_version"
+                else
+                    echo "$(date '+%H:%M:%S') - Warning: PluginPages plugin source not found at $source_dir"
+                    all_success=false
+                fi
+            else
+                echo "$(date '+%H:%M:%S') - PluginPages plugin version $installed_version already installed (>= $pluginpages_version), skipping..."
+            fi
+        else
+            echo "$(date '+%H:%M:%S') - Installing PluginPages plugin version: $pluginpages_version"
+
+            if [ -d "$source_dir" ]; then
+                mkdir -p "${target_dir}"
+                cp -r "${source_dir}"/* "${target_dir}/"
+                chmod -R 755 "${target_dir}"
+                validate_meta_json "${target_dir}"
+                echo "$(date '+%H:%M:%S') - PluginPages plugin installed successfully"
+            else
+                echo "$(date '+%H:%M:%S') - Warning: PluginPages plugin not found at $source_dir"
                 all_success=false
             fi
         fi
