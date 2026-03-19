@@ -120,7 +120,7 @@ RUN apt-get update \
  && curl -fsSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 9.0 --install-dir /usr/local/bin \
  && git clone http://10.10.10.220:3000/soultaco83/jellyfin-plugin-file-transformation.git ${SOURCE_DIR}
 
-RUN dotnet publish ${SOURCE_DIR}/src/Jellyfin.Plugin.FileTransformation/Jellyfin.Plugin.FileTransformation.csproj \
+RUN dotnet build ${SOURCE_DIR}/src/Jellyfin.Plugin.FileTransformation/Jellyfin.Plugin.FileTransformation.csproj \
     --configuration Release \
     --output ${ARTIFACT_DIR}
 
