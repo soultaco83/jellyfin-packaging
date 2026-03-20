@@ -315,7 +315,7 @@ RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
 
 # Install FileTransformation plugin built from source
 COPY --from=plugin /plugin /jellyfin/plugins/FileTransformation_2.5.0.0
-RUN printf '{"category":"General","changelog":"Remove UsePathTrim - not present in current Jellyfin server","description":"Jellyfin plugin to allow other plugin developers to intercept and change the delivered web content of jellyfin-web without requiring custom jellyfin-web builds.","guid":"5e87cc92-571a-4d8d-8d98-d2d4147f9f90","name":"FileTransformation","overview":"Web file transformation for plugin developers.","owner":"IAmParadox27","targetAbi":"10.11.0.0","timestamp":"","version":"2.5.0.0","status":"Active","autoUpdate":false,"imagePath":"","assemblies":["Jellyfin.Plugin.FileTransformation.dll"]}' \
+RUN printf '{"category":"General","changelog":"Remove UsePathTrim - not present in current Jellyfin server","description":"Jellyfin plugin to allow other plugin developers to intercept and change the delivered web content of jellyfin-web without requiring custom jellyfin-web builds.","guid":"5e87cc92-571a-4d8d-8d98-d2d4147f9f90","name":"FileTransformation","overview":"Web file transformation for plugin developers.","owner":"IAmParadox27","targetAbi":"10.11.0.0","timestamp":"2026-01-01T00:00:00.0000000Z","version":"2.5.0.0","status":"Active","autoUpdate":false,"imagePath":"","assemblies":["Jellyfin.Plugin.FileTransformation.dll"]}' \
     > /jellyfin/plugins/FileTransformation_2.5.0.0/meta.json \
  && echo "FILETRANS_VERSION=2.5.0.0" >> /etc/environment
 
