@@ -108,6 +108,7 @@ FROM debian:${OS_VERSION}-slim AS plugin
 
 ARG SOURCE_DIR=/src
 ARG ARTIFACT_DIR=/plugin
+ARG DOTNET_VERSION
 
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 
@@ -117,12 +118,13 @@ RUN apt-get update \
     ca-certificates \
     git \
     libicu76 \
- && curl -fsSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 9.0 --install-dir /usr/local/bin \
+ && curl -fsSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel ${DOTNET_VERSION} --install-dir /usr/local/bin \
  && git clone http://10.10.10.220:3000/soultaco83/jellyfin-plugin-file-transformation.git ${SOURCE_DIR}
 
 RUN dotnet publish ${SOURCE_DIR}/src/Jellyfin.Plugin.FileTransformation/Jellyfin.Plugin.FileTransformation.csproj \
     --configuration Release \
-    --output ${ARTIFACT_DIR}
+    --output ${ARTIFACT_DIR} \
+    -p:TargetFramework=net${DOTNET_VERSION}
 
 #
 # Build the final combined image
