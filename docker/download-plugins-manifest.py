@@ -166,7 +166,6 @@ def install_plugin(manifest, plugin_name, guid, plugin_dir, env_var_name=None):
         # Store version in environment file
         if env_var_name is None:
             var_name_map = {
-                "FileTransformation": "FILETRANS_VERSION",
                 "CustomTabs": "CUSTOMTABS_VERSION",
                 "Enhanced": "ENHANCED_VERSION",
                 "PluginPages": "PLUGINPAGES_VERSION",
@@ -340,14 +339,13 @@ def main():
     # Download main manifest
     manifest = download_manifest(MANIFEST_URL, "IAmParadox manifest")
     if not manifest:
-        print("⚠ IAmParadox manifest unavailable — skipping FileTransformation and PluginPages")
+        print("⚠ IAmParadox manifest unavailable — skipping PluginPages")
 
     # Install plugins
     success_count = 0
     fail_count = 0
 
-    # Plugins from IAmParadox manifest (CustomTabs removed - using soultaco83 repo instead)
-    # FileTransformation removed - built from source in Dockerfile from soultaco83 Forgejo repo
+    # Plugins from IAmParadox manifest (CustomTabs uses soultaco83 repo instead)
     if manifest:
         plugins = [
             ("PluginPages", "5b6550fa-a014-4f4c-8a2c-59a43680ac6d")
