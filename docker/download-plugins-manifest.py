@@ -346,28 +346,28 @@ def main():
     fail_count = 0
 
     # Plugins from IAmParadox manifest (CustomTabs uses soultaco83 repo instead)
-    if manifest:
-        plugins = [
-            ("PluginPages", "5b6550fa-a014-4f4c-8a2c-59a43680ac6d")
-        ]
+    # if manifest:
+    #     plugins = [
+    #         ("PluginPages", "5b6550fa-a014-4f4c-8a2c-59a43680ac6d")
+    #     ]
+    #
+    #     for plugin_name, guid in plugins:
+    #         if install_plugin(manifest, plugin_name, guid, plugin_dir):
+    #             success_count += 1
+    #         else:
+    #             fail_count += 1
 
-        for plugin_name, guid in plugins:
-            if install_plugin(manifest, plugin_name, guid, plugin_dir):
-                success_count += 1
-            else:
-                fail_count += 1
-    
     # Install CustomTabs from soultaco83 repo (master branch compatible)
-    if install_customtabs_plugin(plugin_dir):
-        success_count += 1
-    else:
-        fail_count += 1
-    
+    # if install_customtabs_plugin(plugin_dir):
+    #     success_count += 1
+    # else:
+    #     fail_count += 1
+
     # Install Enhanced separately (different repo)
-    if install_enhanced_plugin(plugin_dir):
-        success_count += 1
-    else:
-        fail_count += 1
+    # if install_enhanced_plugin(plugin_dir):
+    #     success_count += 1
+    # else:
+    #     fail_count += 1
 
     # Summary
     print()
