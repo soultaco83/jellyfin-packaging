@@ -102,6 +102,34 @@ RUN dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFI
     -p:DebugSymbols=false -p:DebugType=none
 
 #
+# Build the FileTransformation plugin
+#
+FROM debian:${OS_VERSION}-slim AS plugin
+
+ARG DOTNET_ARCH
+ARG DOTNET_VERSION
+
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
+
+RUN apt-get update \
+ && apt-get install --no-install-recommends --no-install-suggests --yes \
+    curl \
+    ca-certificates \
+    libicu76 \
+ && curl -fsSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel ${DOTNET_VERSION} --install-dir /usr/local/bin
+
+# Set up directory structure matching the plugin's ProjectReference relative paths:
+# Plugin csproj expects ../../../jellyfin-server-unstable/ from its location
+WORKDIR /repos
+COPY jellyfin-server jellyfin-server-unstable
+COPY jellyfin-plugin-file-transformation jellyfin-plugin-file-transformation
+
+RUN dotnet publish \
+    jellyfin-plugin-file-transformation/src/Jellyfin.Plugin.FileTransformation/Jellyfin.Plugin.FileTransformation.csproj \
+    --configuration Release \
+    --output /plugin-output
+
+#
 # Build the final combined image
 #
 FROM --platform=linux/${TARGET_ARCH} debian:${OS_VERSION}-slim AS combined
@@ -289,6 +317,12 @@ COPY --from=server /server /jellyfin
 COPY --from=web /web /jellyfin/jellyfin-web
 
 RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
+
+# Install FileTransformation plugin (built from source for 10.12 compatibility)
+COPY --from=plugin /plugin-output /jellyfin/plugins/FileTransformation_2.5.0.0/
+RUN printf '{"category":"General","changelog":"","description":"Jellyfin plugin to intercept and transform web content without custom builds.","guid":"5e87cc92-571a-4d8d-8d98-d2d4147f9f90","name":"File Transformation","overview":"Intercept and transform Jellyfin web files.","owner":"IAmParadox27","targetAbi":"10.12.0.0","timestamp":"","version":"2.5.0.0","status":"Active","autoUpdate":false,"imagePath":"","assemblies":[]}\n' \
+    > /jellyfin/plugins/FileTransformation_2.5.0.0/meta.json \
+ && echo "FILETRANS_VERSION=2.5.0.0" >> /etc/environment
 
 # Download plugins (Python script - install python3, use it, then remove it)
 COPY docker/download-plugins-manifest.py /tmp/download-plugins.py

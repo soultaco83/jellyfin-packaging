@@ -5,3 +5,6 @@
 [submodule "jellyfin-web"]
 	path = jellyfin-web
 	url = http://10.10.10.220:3000/soultaco83/jellyfin-web-unstable.git
+[submodule "jellyfin-plugin-file-transformation"]
+	path = jellyfin-plugin-file-transformation
+	url = http://10.10.10.220:3000/soultaco83/jellyfin-plugin-file-transformation.git
