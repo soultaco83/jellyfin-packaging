@@ -167,7 +167,6 @@ def install_plugin(manifest, plugin_name, guid, plugin_dir, env_var_name=None):
         if env_var_name is None:
             var_name_map = {
                 "CustomTabs": "CUSTOMTABS_VERSION",
-                "Enhanced": "ENHANCED_VERSION",
                 "PluginPages": "PLUGINPAGES_VERSION",
             }
             env_var_name = var_name_map.get(plugin_name, f"{plugin_name.upper()}_VERSION")
@@ -263,69 +262,6 @@ def install_customtabs_plugin(plugin_dir):
         print(f"  ✗ Failed to install CustomTabs: {e}")
         return False
 
-def install_enhanced_plugin(plugin_dir):
-    """Install Enhanced plugin from n00bcodr repo"""
-    print()
-    print("=== Installing Enhanced ===")
-    print("  Note: Enhanced is from n00bcodr repo, not IAmParadox manifest")
-    
-    try:
-        # Get latest release from GitHub API
-        api_url = "https://api.github.com/repos/n00bcodr/jellyfin-enhanced/releases/latest"
-        with urllib.request.urlopen(api_url) as response:
-            release_info = json.loads(response.read())
-        
-        version = release_info['tag_name']
-        print(f"  Latest Enhanced version: {version}")
-        
-        # Enhanced typically uses 10.11.0 builds
-        download_url = f"https://github.com/n00bcodr/Jellyfin-Enhanced/releases/download/{version}/Jellyfin.Plugin.JellyfinEnhanced_10.11.0.zip"
-        
-        print(f"  Downloading from: {download_url}")
-        temp_zip = "/tmp/enhanced.zip"
-        
-        if not download_file(download_url, temp_zip):
-            return False
-        
-        target_dir = Path(plugin_dir) / f"Enhanced_{version}"
-        target_dir.mkdir(parents=True, exist_ok=True)
-        
-        with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
-            zip_ref.extractall(target_dir)
-        
-        print(f"  ✓ Installed to {target_dir}")
-        
-        # Create meta.json for Enhanced
-        # Get changelog from release info
-        changelog = release_info.get('body', '')
-        
-        plugin_metadata = {
-            "guid": "f69e946a-4b3c-4e9a-8f0a-8d7c1b2c4d9b",
-            "name": "Jellyfin Enhanced",
-            "description": "A combination of the Jellyfin Enhanced and Jellyfin Elsewhere userscripts, providing a comprehensive set of tweaks and features for Jellyfin.",
-            "overview": "Jellyfin Enhanced and Jellyfin Elsewhere for a better Jellyfin experience.",
-            "owner": "n00bcodr",
-            "category": "General"
-        }
-        
-        version_info = {
-            "version": version,
-            "targetAbi": "10.11.0.0",
-            "changelog": changelog,
-            "timestamp": release_info.get('published_at', '')
-        }
-        
-        create_meta_json(target_dir, plugin_metadata, version_info, "Enhanced")
-        
-        with open('/etc/environment', 'a') as f:
-            f.write(f"ENHANCED_VERSION={version}\n")
-        
-        os.remove(temp_zip)
-        return True
-        
-    except Exception as e:
-        print(f"  ✗ Failed to install Enhanced: {e}")
-        return False
 
 def main():
     # Get plugin directory from command line or use default
@@ -363,11 +299,6 @@ def main():
     # else:
     #     fail_count += 1
 
-    # Install Enhanced separately (different repo)
-    # if install_enhanced_plugin(plugin_dir):
-    #     success_count += 1
-    # else:
-    #     fail_count += 1
 
     # Summary
     print()
