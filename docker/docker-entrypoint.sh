@@ -158,9 +158,16 @@ with open('$meta_file', 'w') as f:
 # Function to setup plugins (simplified since plugins are now pre-downloaded)
 setup_plugins() {
     echo "$(date '+%H:%M:%S') - Checking pre-installed plugins..."
-    
+
     # Ensure plugin directory exists
     mkdir -p /config/plugins
+
+    # Migrate old FileTransformation folder name if present
+    if [ -d "/config/plugins/FileTransformation_2.5.0.0" ]; then
+        echo "$(date '+%H:%M:%S') - Renaming FileTransformation_2.5.0.0 to FileTransformation_Taco..."
+        mv /config/plugins/FileTransformation_2.5.0.0 /config/plugins/FileTransformation_Taco
+        echo "$(date '+%H:%M:%S') - Rename complete"
+    fi
     
     # Get plugin versions from the build
     local customtabs_version=$(grep -oP 'CUSTOMTABS_VERSION=\K.*' /etc/environment 2>/dev/null)

@@ -319,10 +319,13 @@ COPY --from=web /web /jellyfin/jellyfin-web
 RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
 
 # Install FileTransformation plugin (built from source for 10.12 compatibility)
-COPY --from=plugin /plugin-output /jellyfin/plugins/FileTransformation_2.5.0.0/
-RUN printf '{"category":"General","changelog":"","description":"Jellyfin plugin to intercept and transform web content without custom builds.","guid":"5e87cc92-571a-4d8d-8d98-d2d4147f9f90","name":"File Transformation","overview":"Intercept and transform Jellyfin web files.","owner":"IAmParadox27","targetAbi":"10.12.0.0","timestamp":"","version":"2.5.0.0","status":"Active","autoUpdate":false,"imagePath":"","assemblies":[]}\n' \
-    > /jellyfin/plugins/FileTransformation_2.5.0.0/meta.json \
- && echo "FILETRANS_VERSION=2.5.0.0" >> /etc/environment
+COPY --from=plugin /plugin-output/Jellyfin.Plugin.FileTransformation.deps.json /jellyfin/plugins/FileTransformation_Taco/
+COPY --from=plugin /plugin-output/Jellyfin.Plugin.FileTransformation.dll /jellyfin/plugins/FileTransformation_Taco/
+COPY --from=plugin /plugin-output/Jellyfin.Plugin.FileTransformation.pdb /jellyfin/plugins/FileTransformation_Taco/
+COPY --from=plugin /plugin-output/logo.png /jellyfin/plugins/FileTransformation_Taco/
+RUN printf '{"category":"General","changelog":"","description":"Jellyfin plugin to intercept and transform web content without custom builds.","guid":"5e87cc92-571a-4d8d-8d98-d2d4147f9f90","name":"File Transformation","overview":"Intercept and transform Jellyfin web files.","owner":"IAmParadox27","targetAbi":"10.12.0.0","timestamp":"2025-01-01T00:00:00Z","version":"2.5.0.0","status":"Active","autoUpdate":false,"imagePath":"","assemblies":[]}\n' \
+    > /jellyfin/plugins/FileTransformation_Taco/meta.json \
+ && echo "FILETRANS_VERSION=Taco" >> /etc/environment
 
 # Download plugins (Python script - install python3, use it, then remove it)
 COPY docker/download-plugins-manifest.py /tmp/download-plugins.py
