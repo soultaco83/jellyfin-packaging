@@ -90,6 +90,12 @@ WORKDIR ${SOURCE_DIR}
 COPY jellyfin-server .
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 
+# Apply any .patch files from the .forgejo/patches/ directory
+# (e.g., adding the OriginalLanguage column migration)
+RUN for patch in .forgejo/patches/*.patch .forgejo/patches/*/*.patch; do \
+        [ -f "$patch" ] && echo "Applying $patch" && git apply "$patch" || true; \
+    done
+
 RUN apt-get update \
  && apt-get install --no-install-recommends --no-install-suggests --yes \
     curl \
