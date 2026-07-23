@@ -6,24 +6,24 @@ ARG NODEJS_VERSION=24
 ARG OS_VERSION=trixie
 
 # Jellyfin FFMPEG package
-ARG FFMPEG_PACKAGE=jellyfin-ffmpeg7
+ARG FFMPEG_PACKAGE=jellyfin-ffmpeg8
 
 # https://github.com/intel/vpl-gpu-rt/releases
 ARG VPL_GPU_RT_VER=intel-onevpl-25.3.4
 
 # https://github.com/intel/compute-runtime/releases
-ARG GMMLIB_VER=22.8.2
+ARG GMMLIB_VER=22.10.0
 # >= Gen12 graphics (current) - Battlemage requires these newer versions
-ARG IGC2_VER=2.22.2
-ARG IGC2_BUILD=20121
-ARG NEO_VER=25.44.36015.8
+ARG IGC2_VER=2.34.4
+ARG IGC2_BUILD=21428
+ARG NEO_VER=26.18.38308.1
 # <= Gen11 graphics (legacy)
 ARG IGC1_LEGACY_VER=1.0.17537.24
 ARG NEO_LEGACY_VER=24.35.30872.36
 
 # https://github.com/tsukumijima/libmali-rockchip
 ARG MALI_PKG_VER=1.9-1_arm64
-ARG MALI_PKG_TAG=v1.9-1-2131373
+ARG MALI_PKG_TAG=v1.9-1-20260312-bd33ee2
 ARG MALI_PKG_CFG=valhall-g610-g24p0-gbm
 
 # Debian architecture (amd64, arm64, armhf), set by build script
@@ -204,8 +204,9 @@ RUN apt-get update \
     libfontconfig1 \
     libfreetype6 \
     libjemalloc2 \
+    libdrm2 \
  && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen \
- && apt-get remove gnupg --yes \
+ && apt-get remove gnupg apt-transport-https --yes \
  && apt-get clean autoclean --yes \
  && apt-get autoremove --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
@@ -213,7 +214,7 @@ RUN apt-get update \
 # =============================================================================
 # Intel VAAPI Media Driver via MediaStack for Battlemage (B570/B580)
 # Downloads pre-built binaries from Intel's vpl-gpu-rt releases
-# Note: gmmlib 22.8.2 is installed later in the OpenCL section
+# Note: gmmlib is installed later in the OpenCL section
 # =============================================================================
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     apt-get update \
@@ -244,7 +245,7 @@ ENV LIBVA_DRIVERS_PATH=/usr/lib/x86_64-linux-gnu/dri
 # Intel OpenCL Tone mapping dependencies:
 # Note: This section installs compute runtime for OpenCL-based tone mapping
 # The media driver above handles VAAPI encode/decode
-# Also installs gmmlib 22.8.2 which is required for Battlemage
+# Also installs gmmlib which is required for Battlemage
 RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
     mkdir intel-compute-runtime \
  && cd intel-compute-runtime \
@@ -259,9 +260,8 @@ RUN if test "${PACKAGE_ARCH}" = "amd64"; then \
  && apt-get install --no-install-recommends --no-install-suggests -f -y ./*.deb \
  && cd .. \
  && rm -rf intel-compute-runtime \
- # Copy gmmlib 22.8.2 to jellyfin-ffmpeg lib path (required for Battlemage)
- && cp /usr/lib/x86_64-linux-gnu/libigdgmm.so.12.8.2 /usr/lib/jellyfin-ffmpeg/lib/libigdgmm.so.12.8.2 \
- && ln -sf libigdgmm.so.12.8.2 /usr/lib/jellyfin-ffmpeg/lib/libigdgmm.so.12 \
+ # Copy gmmlib to jellyfin-ffmpeg lib path (required for Battlemage)
+ && cp -L /usr/lib/x86_64-linux-gnu/libigdgmm.so.12 /usr/lib/jellyfin-ffmpeg/lib/libigdgmm.so.12 \
  && ln -sf libigdgmm.so.12 /usr/lib/jellyfin-ffmpeg/lib/libigdgmm.so \
  && apt-get clean autoclean --yes \
  && apt-get autoremove --yes \
