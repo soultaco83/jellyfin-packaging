@@ -412,32 +412,40 @@ enable_legacy_authorization() {
 
 # Function to fix missing database columns before Jellyfin starts
 fix_missing_db_columns() {
-    local db_path="/config/data/library.db"
-    if [ ! -f "$db_path" ]; then
-        return 0
-    fi
-
     # Check if sqlite3 is available
     if ! command -v sqlite3 >/dev/null 2>&1; then
         echo "$(date '+%H:%M:%S') - sqlite3 not available, skipping DB column fixes"
         return 0
     fi
 
-    # Add IsOriginal column to MediaStreamInfos if missing
-    if ! sqlite3 "$db_path" "PRAGMA table_info('MediaStreamInfos');" 2>/dev/null | grep -q 'IsOriginal'; then
-        echo "$(date '+%H:%M:%S') - Adding missing IsOriginal column to MediaStreamInfos..."
-        sqlite3 "$db_path" "ALTER TABLE \"MediaStreamInfos\" ADD COLUMN \"IsOriginal\" INTEGER NOT NULL DEFAULT 0;" 2>/dev/null && \
-            echo "$(date '+%H:%M:%S') - IsOriginal column added successfully" || \
-            echo "$(date '+%H:%M:%S') - Warning: Failed to add IsOriginal column"
-    fi
+    # Fix columns on all database files that exist
+    for db_path in /config/data/jellyfin.db /config/data/library.db; do
+        if [ ! -f "$db_path" ]; then
+            continue
+        fi
 
-    # Add OriginalLanguage column to BaseItems if missing
-    if ! sqlite3 "$db_path" "PRAGMA table_info('BaseItems');" 2>/dev/null | grep -q 'OriginalLanguage'; then
-        echo "$(date '+%H:%M:%S') - Adding missing OriginalLanguage column to BaseItems..."
-        sqlite3 "$db_path" "ALTER TABLE \"BaseItems\" ADD COLUMN \"OriginalLanguage\" TEXT NULL;" 2>/dev/null && \
-            echo "$(date '+%H:%M:%S') - OriginalLanguage column added successfully" || \
-            echo "$(date '+%H:%M:%S') - Warning: Failed to add OriginalLanguage column"
-    fi
+        echo "$(date '+%H:%M:%S') - Checking DB: $db_path for missing columns..."
+
+        # Add IsOriginal column to MediaStreamInfos if table exists and column is missing
+        if sqlite3 "$db_path" "SELECT name FROM sqlite_master WHERE type='table' AND name='MediaStreamInfos';" 2>/dev/null | grep -q 'MediaStreamInfos'; then
+            if ! sqlite3 "$db_path" "PRAGMA table_info('MediaStreamInfos');" 2>/dev/null | grep -q 'IsOriginal'; then
+                echo "$(date '+%H:%M:%S') - Adding missing IsOriginal column to MediaStreamInfos in $(basename "$db_path")..."
+                sqlite3 "$db_path" "ALTER TABLE \"MediaStreamInfos\" ADD COLUMN \"IsOriginal\" INTEGER NOT NULL DEFAULT 0;" 2>/dev/null && \
+                    echo "$(date '+%H:%M:%S') - IsOriginal column added successfully" || \
+                    echo "$(date '+%H:%M:%S') - Warning: Failed to add IsOriginal column"
+            fi
+        fi
+
+        # Add OriginalLanguage column to BaseItems if table exists and column is missing
+        if sqlite3 "$db_path" "SELECT name FROM sqlite_master WHERE type='table' AND name='BaseItems';" 2>/dev/null | grep -q 'BaseItems'; then
+            if ! sqlite3 "$db_path" "PRAGMA table_info('BaseItems');" 2>/dev/null | grep -q 'OriginalLanguage'; then
+                echo "$(date '+%H:%M:%S') - Adding missing OriginalLanguage column to BaseItems in $(basename "$db_path")..."
+                sqlite3 "$db_path" "ALTER TABLE \"BaseItems\" ADD COLUMN \"OriginalLanguage\" TEXT NULL;" 2>/dev/null && \
+                    echo "$(date '+%H:%M:%S') - OriginalLanguage column added successfully" || \
+                    echo "$(date '+%H:%M:%S') - Warning: Failed to add OriginalLanguage column"
+            fi
+        fi
+    done
 }
 
 # Function to apply temp fixes
