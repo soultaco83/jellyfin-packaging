@@ -211,6 +211,7 @@ RUN apt-get update \
     libfreetype6 \
     libjemalloc2 \
     libdrm2 \
+    sqlite3 \
  && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen \
  && apt-get remove gnupg apt-transport-https --yes \
  && apt-get clean autoclean --yes \

@@ -410,6 +410,36 @@ enable_legacy_authorization() {
     fi
 }
 
+# Function to fix missing database columns before Jellyfin starts
+fix_missing_db_columns() {
+    local db_path="/config/data/library.db"
+    if [ ! -f "$db_path" ]; then
+        return 0
+    fi
+
+    # Check if sqlite3 is available
+    if ! command -v sqlite3 >/dev/null 2>&1; then
+        echo "$(date '+%H:%M:%S') - sqlite3 not available, skipping DB column fixes"
+        return 0
+    fi
+
+    # Add IsOriginal column to MediaStreamInfos if missing
+    if ! sqlite3 "$db_path" "PRAGMA table_info('MediaStreamInfos');" 2>/dev/null | grep -q 'IsOriginal'; then
+        echo "$(date '+%H:%M:%S') - Adding missing IsOriginal column to MediaStreamInfos..."
+        sqlite3 "$db_path" "ALTER TABLE \"MediaStreamInfos\" ADD COLUMN \"IsOriginal\" INTEGER NOT NULL DEFAULT 0;" 2>/dev/null && \
+            echo "$(date '+%H:%M:%S') - IsOriginal column added successfully" || \
+            echo "$(date '+%H:%M:%S') - Warning: Failed to add IsOriginal column"
+    fi
+
+    # Add OriginalLanguage column to BaseItems if missing
+    if ! sqlite3 "$db_path" "PRAGMA table_info('BaseItems');" 2>/dev/null | grep -q 'OriginalLanguage'; then
+        echo "$(date '+%H:%M:%S') - Adding missing OriginalLanguage column to BaseItems..."
+        sqlite3 "$db_path" "ALTER TABLE \"BaseItems\" ADD COLUMN \"OriginalLanguage\" TEXT NULL;" 2>/dev/null && \
+            echo "$(date '+%H:%M:%S') - OriginalLanguage column added successfully" || \
+            echo "$(date '+%H:%M:%S') - Warning: Failed to add OriginalLanguage column"
+    fi
+}
+
 # Function to apply temp fixes
 apply_temp_fixes() {
     # Temp fix for webos
@@ -487,6 +517,10 @@ fi
 
 # Wait for all background operations to complete
 wait
+
+# Fix any missing database columns before Jellyfin starts
+echo "$(date '+%H:%M:%S') - Checking for missing database columns..."
+fix_missing_db_columns
 
 # Update marker file
 touch "$CONTAINER_MARKER"
