@@ -8,3 +8,7 @@
 [submodule "jellyfin-plugin-file-transformation"]
 	path = jellyfin-plugin-file-transformation
 	url = http://10.10.10.220:3000/soultaco83/jellyfin-plugin-file-transformation.git
+[submodule "jellyfin-plugin-pgsql"]
+	path = jellyfin-plugin-pgsql
+	url = https://github.com/JPVenson/Jellyfin.Pgsql.git
+	branch = feature/12.0_unstable

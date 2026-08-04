@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  jellyfin:
+    image: soultaco83/jellyfin_with_request:latest
+    container_name: jellyfin
+    environment:
+      - POSTGRES_ENABLED=true
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=jellyfin
+      - POSTGRES_USER=jellyfin
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_SSL_MODE=Prefer
+      - POSTGRES_MAX_POOL_SIZE=128
+      - POSTGRES_TIMEOUT=60
+      - PUID=99
+      - PGID=100
+      - UMASK=022
+      - JELLYFIN_PublishedServerUrl=http://localhost:8096
+    ports:
+      - "8096:8096"
+      - "8920:8920"
+      - "7359:7359/udp"
+      - "1900:1900/udp"
+    volumes:
+      - ./config:/config
+      - ./cache:/cache
+      - ./media/tvshows:/data/tvshows:ro
+      - ./media/movies:/data/movies:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: jellyfin-postgres
+    environment:
+      - POSTGRES_DB=jellyfin
+      - POSTGRES_USER=jellyfin
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jellyfin -d jellyfin"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped

@@ -1,0 +1,106 @@
+diff --git a/docker/docker-entrypoint.sh b/docker/docker-entrypoint.sh
+index f1a2b3c..d4e5f6a 100755
+--- a/docker/docker-entrypoint.sh
++++ b/docker/docker-entrypoint.sh
+@@ -18,6 +18,68 @@ DB_FILES=(
+     "/config/data/library.db-wal"
+ )
+ 
++# Function to validate and set defaults for Postgres environment variables
++validate_postgres_env() {
++    POSTGRES_PORT="${POSTGRES_PORT:-5432}"
++    POSTGRES_DB="${POSTGRES_DB:-jellyfin}"
++    POSTGRES_USER="${POSTGRES_USER:-jellyfin}"
++    POSTGRES_SSL_MODE="${POSTGRES_SSL_MODE:-Prefer}"
++    POSTGRES_MAX_POOL_SIZE="${POSTGRES_MAX_POOL_SIZE:-128}"
++    POSTGRES_TIMEOUT="${POSTGRES_TIMEOUT:-60}"
++
++    local missing=()
++    [ -z "${POSTGRES_HOST}" ] && missing+=("POSTGRES_HOST")
++    [ -z "${POSTGRES_PASSWORD}" ] && missing+=("POSTGRES_PASSWORD")
++
++    if [ ${#missing[@]} -gt 0 ]; then
++        echo "$(date '+%H:%M:%S') - ERROR: PostgreSQL enabled but missing required env vars: ${missing[*]}"
++        exit 1
++    fi
++
++    echo "$(date '+%H:%M:%S') - PostgreSQL config: Host=${POSTGRES_HOST}, Port=${POSTGRES_PORT}, DB=${POSTGRES_DB}, User=${POSTGRES_USER}"
++}
++
++# Function to wait for PostgreSQL to become ready
++wait_for_postgres() {
++    echo "$(date '+%H:%M:%S') - Waiting for PostgreSQL at ${POSTGRES_HOST}:${POSTGRES_PORT}..."
++    local max_attempts=30
++    local attempt=1
++
++    while ! nc -z "${POSTGRES_HOST}" "${POSTGRES_PORT}" 2>/dev/null; do
++        if [ $attempt -ge $max_attempts ]; then
++            echo "$(date '+%H:%M:%S') - ERROR: PostgreSQL not reachable within 60 seconds"
++            exit 1
++        fi
++        echo "$(date '+%H:%M:%S') - Waiting... (attempt $attempt/$max_attempts)"
++        sleep 2
++        attempt=$((attempt + 1))
++    done
++    echo "$(date '+%H:%M:%S') - PostgreSQL port reachable, waiting 3s for init..."
++    sleep 3
++    echo "$(date '+%H:%M:%S') - PostgreSQL is ready!"
++}
++
++# Function to write PostgreSQL database.xml configuration
++write_postgres_config() {
++    local db_config_dir="/config/config"
++    local db_config_file="${db_config_dir}/database.xml"
++
++    mkdir -p "${db_config_dir}"
++
++    if [ -f "${db_config_file}" ]; then
++        echo "$(date '+%H:%M:%S') - database.xml already exists, skipping PostgreSQL config write"
++        return 0
++    fi
++
++    local cs="Host=${POSTGRES_HOST};Port=${POSTGRES_PORT};Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};SslMode=${POSTGRES_SSL_MODE};MaxPoolSize=${POSTGRES_MAX_POOL_SIZE};ApplicationName=jellyfin"
++
++    echo "$(date '+%H:%M:%S') - Writing PostgreSQL database.xml..."
++    printf '<?xml version="1.0" encoding="utf-8"?>\n<DatabaseConfigurationOptions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">\n  <DatabaseType>PLUGIN_PROVIDER</DatabaseType>\n  <LockingBehavior>Pessimistic</LockingBehavior>\n  <CustomProviderOptions>\n    <PluginName>Jellyfin.Pgsql</PluginName>\n    <PluginAssembly>Jellyfin.Pgsql</PluginAssembly>\n    <ConnectionString>%s</ConnectionString>\n    <Options>\n      <CustomDatabaseOption>\n        <Key>Command-Timeout</Key>\n        <Value>%s</Value>\n      </CustomDatabaseOption>\n      <CustomDatabaseOption>\n        <Key>MaxPoolSize</Key>\n        <Value>%s</Value>\n      </CustomDatabaseOption>\n    </Options>\n  </CustomProviderOptions>\n</DatabaseConfigurationOptions>\n' "${cs}" "${POSTGRES_TIMEOUT}" "${POSTGRES_MAX_POOL_SIZE}" > "${db_config_file}"
++
++    echo "$(date '+%H:%M:%S') - PostgreSQL database.xml written successfully"
++}
++
+ # Function to perform database backup with optimizations
+ perform_db_backup() {
+     local reason="$1"
+@@ -468,6 +530,38 @@ if [ -f "$DOCKER_BUILD_FILE" ]; then
+     echo "$(date '+%H:%M:%S') - Previous Docker Build Signature: $(cat $DOCKER_BUILD_FILE)"
+ fi
+ 
++# ---- PostgreSQL mode ----
++if [ "${POSTGRES_ENABLED}" = "true" ]; then
++    echo "$(date '+%H:%M:%S') - PostgreSQL mode enabled"
++    validate_postgres_env
++    wait_for_postgres
++    write_postgres_config
++
++    apply_temp_fixes &
++
++    if ! setup_plugins; then
++        echo "$(date '+%H:%M:%S') - WARNING: Plugin setup failed. Container will continue but plugins may not work."
++    fi
++
++    update_plugin_repositories
++    enable_legacy_authorization
++
++    wait
++
++    touch "$CONTAINER_MARKER"
++    echo "$(date '+%H:%M:%S') - PostgreSQL setup complete"
++    echo "$(date '+%H:%M:%S') - Starting Jellyfin with Postgres at $@..."
++    exec "$@"
++    exit 0
++fi
++
++# ---- SQLite mode (original logic) ----
++
+ # Determine if backup is needed
+ backup_needed=false
+ backup_reason=""
