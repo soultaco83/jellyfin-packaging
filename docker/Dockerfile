@@ -136,23 +136,6 @@ RUN dotnet publish \
     --output /plugin-output
 
 #
-# Build the JPVenson PostgreSQL plugin from source
-#
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS pgsql
-
-ARG DOTNET_ARCH
-
-ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
-
-WORKDIR /pgsql-src
-COPY jellyfin-plugin-pgsql .
-
-RUN dotnet publish Jellyfin.Plugin.Pgsql/Jellyfin.Plugin.Pgsql.csproj \
-    --configuration Release \
-    --arch ${DOTNET_ARCH} \
-    --output /pgsql-output
-
-#
 # Build the final combined image
 #
 FROM --platform=linux/${TARGET_ARCH} debian:${OS_VERSION}-slim AS combined
@@ -229,8 +212,6 @@ RUN apt-get update \
     libjemalloc2 \
     libdrm2 \
     sqlite3 \
-    postgresql-client \
-    pgloader \
  && sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen \
  && apt-get remove gnupg apt-transport-https --yes \
  && apt-get clean autoclean --yes \
@@ -363,11 +344,6 @@ RUN apt-get update \
  && apt-get clean autoclean --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
  && rm /tmp/download-plugins.py
-
-# Copy JPVenson PostgreSQL plugin (built from source) and pgloader migration assets
-COPY --from=pgsql /pgsql-output/ /jellyfin-pgsql/plugin/
-COPY jellyfin-plugin-pgsql/docker/jellyfindb.load /jellyfin-pgsql/jellyfindb.load
-COPY jellyfin-plugin-pgsql/docker/database.xml /jellyfin-pgsql/database.xml
 
 # Copy entrypoint
 COPY docker/docker-entrypoint.sh /usr/local/bin/
