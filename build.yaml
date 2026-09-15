@@ -20,7 +20,6 @@ docker:
       DOTNET_ARCH: x64
       IMAGE_ARCH: amd64
       PACKAGE_ARCH: amd64
-      QEMU_ARCH: x86_64
       TARGET_ARCH: amd64
   dockerfile: docker/Dockerfile
   imagename: soultaco83/jellyfin_with_request
