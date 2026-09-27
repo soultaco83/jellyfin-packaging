@@ -1,0 +1,28 @@
+diff --git a/.forgejo/workflows/Dev-- Build Docker.yml b/.forgejo/workflows/Dev-- Build Docker.yml
+index edec610..9329104 100644
+--- a/.forgejo/workflows/Dev-- Build Docker.yml	
++++ b/.forgejo/workflows/Dev-- Build Docker.yml	
+@@ -9,8 +9,12 @@ on:
+         default: 'master'
+         description: 'The server and web stable release tag ("vX.Y.Z") or "master"'
+ 
+-permissions:
+-  contents: write
++# NOTE: The GitHub Actions `permissions:` key is NOT supported by Forgejo.
++# Forgejo ignores it and reports a workflow warning for every job:
++#   "Job <id> or its workflow has a permissions field, which is not supported
++#    in Forgejo and will be ignored."
++# Grant the required capabilities with repository secrets (e.g. FORGEJO_TOKEN)
++# or with Authorized Integrations instead.
+ 
+ # Prevent concurrent runs
+ concurrency:
+@@ -24,7 +28,7 @@ jobs:
+       - name: "Checkout repository"
+         uses: actions/checkout@v4
+         with:
+-          token: ${{ secrets.GITHUB_TOKEN }}
++          token: ${{ secrets.FORGEJO_TOKEN || secrets.GITHUB_TOKEN }}
+           fetch-depth: 0
+           submodules: false
+ 
