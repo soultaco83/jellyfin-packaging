@@ -4,3 +4,5 @@ build/
 out/
 # Ignore the generated Debian changelog
 debian/changelog
+# Ignore Python bytecode caches
+__pycache__/

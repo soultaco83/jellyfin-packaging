@@ -3,28 +3,26 @@
 
 # Jellyfin with Pre-installed Plugins
 
-This Docker image includes Jellyfin with several pre-installed plugins for enhanced functionality.
+This Docker image builds Jellyfin from the `master` branch (version 13.x, .NET 10) and ships with the
+File Transformation plugin pre-installed.
 
 ## Included Plugins
 
-This image comes with the following plugins pre-installed:
+This image comes with the following plugin pre-installed:
 
-1. **Custom Tabs** by IAmParadox27 - Add custom tabs to your Jellyfin interface
-   - Repository: https://github.com/IAmParadox27/jellyfin-plugin-custom-tabs
-   - License: GPL-3.0
-
-2. **File Transformation** by IAmParadox27 - Transform and manage files
+1. **File Transformation** by IAmParadox27 - Intercept and transform Jellyfin web files at runtime
    - Repository: https://github.com/IAmParadox27/jellyfin-plugin-file-transformation
    - License: GPL-3.0
-
-3. **Jellyfin Enhanced** by n00bcodr - Enhanced Jellyfin features
-   - Repository: https://github.com/n00bcodr/jellyfin-enhanced
+   - Source: the newest published release is downloaded during the image build and the variant with
+     the highest `targetAbi` (newest supported Jellyfin server) is installed
 
 ## Plugin Repositories
 
-The following plugin repositories are automatically configured:
-- Enhanced: `https://raw.githubusercontent.com/n00bcodr/jellyfin-enhanced/main/manifest.json`
+The following plugin repository is automatically configured:
 - IAmParadox: `https://www.iamparadox.dev/jellyfin/plugins/manifest.json`
+
+The bundled plugin is installed into the image and copied to `/config/plugins` on first start. Its
+`meta.json` has `autoUpdate` enabled, so Jellyfin can install newer releases on its own.
 
 ## Usage
 ```bash
@@ -52,7 +50,7 @@ This Docker image includes plugins licensed under GPL-3.0. See individual plugin
 ## Credits
 
 - Jellyfin Project: https://jellyfin.org
-- Plugin developers: IAmParadox27, n00bcodr
+- Plugin developer: IAmParadox27
 
 ---
 

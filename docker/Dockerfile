@@ -1,5 +1,5 @@
 # Docker build arguments
-ARG DOTNET_VERSION=8.0
+ARG DOTNET_VERSION=10.0
 ARG NODEJS_VERSION=24
 
 # Combined image version (Debian)
@@ -106,34 +106,6 @@ RUN apt-get update \
 RUN dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFIG} \
     --output="${ARTIFACT_DIR}" --self-contained \
     -p:DebugSymbols=false -p:DebugType=none
-
-#
-# Build the FileTransformation plugin
-#
-FROM debian:${OS_VERSION}-slim AS plugin
-
-ARG DOTNET_ARCH
-ARG DOTNET_VERSION
-
-ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
-
-RUN apt-get update \
- && apt-get install --no-install-recommends --no-install-suggests --yes \
-    curl \
-    ca-certificates \
-    libicu76 \
- && curl -fsSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel ${DOTNET_VERSION} --install-dir /usr/local/bin
-
-# Set up directory structure matching the plugin's ProjectReference relative paths:
-# Plugin csproj expects ../../../jellyfin-server-unstable/ from its location
-WORKDIR /repos
-COPY jellyfin-server jellyfin-server-unstable
-COPY jellyfin-plugin-file-transformation jellyfin-plugin-file-transformation
-
-RUN dotnet publish \
-    jellyfin-plugin-file-transformation/src/Jellyfin.Plugin.FileTransformation/Jellyfin.Plugin.FileTransformation.csproj \
-    --configuration Release \
-    --output /plugin-output
 
 #
 # Build the final combined image
@@ -332,25 +304,17 @@ COPY --from=web /web /jellyfin/jellyfin-web
 
 RUN chmod 777 -R ${JELLYFIN_WEB_DIR}
 
-# Install FileTransformation plugin (built from source for 10.12 compatibility)
-COPY --from=plugin /plugin-output/Jellyfin.Plugin.FileTransformation.deps.json /jellyfin/plugins/FileTransformation_Taco/
-COPY --from=plugin /plugin-output/Jellyfin.Plugin.FileTransformation.dll /jellyfin/plugins/FileTransformation_Taco/
-COPY --from=plugin /plugin-output/Jellyfin.Plugin.FileTransformation.pdb /jellyfin/plugins/FileTransformation_Taco/
-COPY --from=plugin /plugin-output/logo.png /jellyfin/plugins/FileTransformation_Taco/
-RUN printf '{"category":"General","changelog":"","description":"Jellyfin plugin to intercept and transform web content without custom builds.","guid":"5e87cc92-571a-4d8d-8d98-d2d4147f9f90","name":"File Transformation","overview":"Intercept and transform Jellyfin web files.","owner":"IAmParadox27","targetAbi":"10.12.0.0","timestamp":"2025-01-01T00:00:00Z","version":"2.5.0.0","status":"Active","autoUpdate":false,"imagePath":"","assemblies":[]}\n' \
-    > /jellyfin/plugins/FileTransformation_Taco/meta.json \
- && echo "FILETRANS_VERSION=Taco" >> /etc/environment
-
-# Download plugins (Python script - install python3, use it, then remove it)
-COPY docker/download-plugins-manifest.py /tmp/download-plugins.py
+# Install bundled plugins (newest upstream release, highest targetAbi).
+# Python is only needed for the download step and is removed afterwards.
+COPY docker/install-plugins.py /tmp/install-plugins.py
 RUN apt-get update \
  && apt-get install --no-install-recommends --no-install-suggests --yes python3 \
- && python3 /tmp/download-plugins.py "/jellyfin/plugins" \
+ && python3 /tmp/install-plugins.py "/jellyfin/plugins" \
  && apt-get remove --yes python3 \
  && apt-get autoremove --yes \
  && apt-get clean autoclean --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
- && rm /tmp/download-plugins.py
+ && rm /tmp/install-plugins.py
 
 # Copy entrypoint
 COPY docker/docker-entrypoint.sh /usr/local/bin/

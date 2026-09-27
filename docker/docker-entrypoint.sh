@@ -162,61 +162,17 @@ setup_plugins() {
     # Ensure plugin directory exists
     mkdir -p /config/plugins
 
-    # Migrate old FileTransformation folder name if present
-    if [ -d "/config/plugins/FileTransformation_2.5.0.0" ]; then
-        echo "$(date '+%H:%M:%S') - Renaming FileTransformation_2.5.0.0 to FileTransformation_Taco..."
-        mv /config/plugins/FileTransformation_2.5.0.0 /config/plugins/FileTransformation_Taco
-        echo "$(date '+%H:%M:%S') - Rename complete"
+    # Remove the legacy hand-built FileTransformation fork, it is superseded by
+    # the upstream release bundled in the image
+    if [ -d "/config/plugins/FileTransformation_Taco" ]; then
+        echo "$(date '+%H:%M:%S') - Removing legacy FileTransformation_Taco plugin folder..."
+        rm -rf /config/plugins/FileTransformation_Taco
     fi
-    
+
     # Get plugin versions from the build
-    local customtabs_version=$(grep -oP 'CUSTOMTABS_VERSION=\K.*' /etc/environment 2>/dev/null)
-    local filetrans_version=$(grep -oP 'FILETRANS_VERSION=\K.*' /etc/environment 2>/dev/null)
-    local enhanced_version=$(grep -oP 'ENHANCED_VERSION=\K.*' /etc/environment 2>/dev/null)
-    local pluginpages_version=$(grep -oP 'PLUGINPAGES_VERSION=\K.*' /etc/environment 2>/dev/null)
+    local filetrans_version=$(grep -oP 'FILETRANSFORMATION_VERSION=\K.*' /etc/environment 2>/dev/null)
 
     local all_success=true
-
-    # Install CustomTabs (only if needed or if newer)
-    if [ -n "$customtabs_version" ]; then
-        local source_dir="/jellyfin/plugins/CustomTabs_${customtabs_version}"
-        local target_dir="/config/plugins/CustomTabs_${customtabs_version}"
-        local installed_version=$(get_installed_version "CustomTabs")
-        
-        if [ -n "$installed_version" ]; then
-            if version_gt "$customtabs_version" "$installed_version"; then
-                echo "$(date '+%H:%M:%S') - Newer CustomTabs version available ($customtabs_version > $installed_version), updating..."
-                # Clean old versions
-                rm -rf /config/plugins/CustomTabs_* 2>/dev/null || true
-                
-                if [ -d "$source_dir" ]; then
-                    mkdir -p "${target_dir}"
-                    cp -r "${source_dir}"/* "${target_dir}/"
-                    chmod -R 755 "${target_dir}"
-                    validate_meta_json "${target_dir}"
-                    echo "$(date '+%H:%M:%S') - CustomTabs plugin updated to version $customtabs_version"
-                else
-                    echo "$(date '+%H:%M:%S') - Warning: CustomTabs plugin source not found at $source_dir"
-                    all_success=false
-                fi
-            else
-                echo "$(date '+%H:%M:%S') - CustomTabs plugin version $installed_version already installed (>= $customtabs_version), skipping..."
-            fi
-        else
-            echo "$(date '+%H:%M:%S') - Installing CustomTabs plugin version: $customtabs_version"
-            
-            if [ -d "$source_dir" ]; then
-                mkdir -p "${target_dir}"
-                cp -r "${source_dir}"/* "${target_dir}/"
-                chmod -R 755 "${target_dir}"
-                validate_meta_json "${target_dir}"
-                echo "$(date '+%H:%M:%S') - CustomTabs plugin installed successfully"
-            else
-                echo "$(date '+%H:%M:%S') - Warning: CustomTabs plugin not found at $source_dir"
-                all_success=false
-            fi
-        fi
-    fi
 
     # Install FileTransformation (only if needed or if newer)
     if [ -n "$filetrans_version" ]; then
@@ -259,87 +215,6 @@ setup_plugins() {
         fi
     fi
 
-    # Install PluginPages (only if needed or if newer)
-    if [ -n "$pluginpages_version" ]; then
-        local source_dir="/jellyfin/plugins/PluginPages_${pluginpages_version}"
-        local target_dir="/config/plugins/PluginPages_${pluginpages_version}"
-        local installed_version=$(get_installed_version "PluginPages")
-
-        if [ -n "$installed_version" ]; then
-            if version_gt "$pluginpages_version" "$installed_version"; then
-                echo "$(date '+%H:%M:%S') - Newer PluginPages version available ($pluginpages_version > $installed_version), updating..."
-                rm -rf /config/plugins/PluginPages_* 2>/dev/null || true
-
-                if [ -d "$source_dir" ]; then
-                    mkdir -p "${target_dir}"
-                    cp -r "${source_dir}"/* "${target_dir}/"
-                    chmod -R 755 "${target_dir}"
-                    validate_meta_json "${target_dir}"
-                    echo "$(date '+%H:%M:%S') - PluginPages plugin updated to version $pluginpages_version"
-                else
-                    echo "$(date '+%H:%M:%S') - Warning: PluginPages plugin source not found at $source_dir"
-                    all_success=false
-                fi
-            else
-                echo "$(date '+%H:%M:%S') - PluginPages plugin version $installed_version already installed (>= $pluginpages_version), skipping..."
-            fi
-        else
-            echo "$(date '+%H:%M:%S') - Installing PluginPages plugin version: $pluginpages_version"
-
-            if [ -d "$source_dir" ]; then
-                mkdir -p "${target_dir}"
-                cp -r "${source_dir}"/* "${target_dir}/"
-                chmod -R 755 "${target_dir}"
-                validate_meta_json "${target_dir}"
-                echo "$(date '+%H:%M:%S') - PluginPages plugin installed successfully"
-            else
-                echo "$(date '+%H:%M:%S') - Warning: PluginPages plugin not found at $source_dir"
-                all_success=false
-            fi
-        fi
-    fi
-
-    # Install Enhanced (only if needed or if newer)
-    if [ -n "$enhanced_version" ]; then
-        local source_dir="/jellyfin/plugins/Enhanced_${enhanced_version}"
-        local target_dir="/config/plugins/Enhanced_${enhanced_version}"
-        local installed_version=$(get_installed_version "Enhanced")
-        
-        if [ -n "$installed_version" ]; then
-            if version_gt "$enhanced_version" "$installed_version"; then
-                echo "$(date '+%H:%M:%S') - Newer Enhanced version available ($enhanced_version > $installed_version), updating..."
-                # Clean old versions
-                rm -rf /config/plugins/Enhanced_* 2>/dev/null || true
-                
-                if [ -d "$source_dir" ]; then
-                    mkdir -p "${target_dir}"
-                    cp -r "${source_dir}"/* "${target_dir}/"
-                    chmod -R 755 "${target_dir}"
-                    validate_meta_json "${target_dir}"
-                    echo "$(date '+%H:%M:%S') - Enhanced plugin updated to version $enhanced_version"
-                else
-                    echo "$(date '+%H:%M:%S') - Warning: Enhanced plugin source not found at $source_dir"
-                    all_success=false
-                fi
-            else
-                echo "$(date '+%H:%M:%S') - Enhanced plugin version $installed_version already installed (>= $enhanced_version), skipping..."
-            fi
-        else
-            echo "$(date '+%H:%M:%S') - Installing Enhanced plugin version: $enhanced_version"
-            
-            if [ -d "$source_dir" ]; then
-                mkdir -p "${target_dir}"
-                cp -r "${source_dir}"/* "${target_dir}/"
-                chmod -R 755 "${target_dir}"
-                validate_meta_json "${target_dir}"
-                echo "$(date '+%H:%M:%S') - Enhanced plugin installed successfully"
-            else
-                echo "$(date '+%H:%M:%S') - Warning: Enhanced plugin not found at $source_dir"
-                all_success=false
-            fi
-        fi
-    fi
-
     if [ "$all_success" = false ]; then
         echo "$(date '+%H:%M:%S') - Warning: Some plugins failed to install. Container will continue but plugins may not work."
         return 1
@@ -366,15 +241,6 @@ update_plugin_repositories() {
         echo "$(date '+%H:%M:%S') - Adding PluginRepositories section to system.xml"
         # Insert before </ServerConfiguration> tag
         sed -i 's|</ServerConfiguration>|  <PluginRepositories>\n  </PluginRepositories>\n</ServerConfiguration>|' "$system_xml"
-    fi
-
-    # Add Enhanced repository if not present (check using full URL)
-    local enhanced_repo_url="https://raw.githubusercontent.com/n00bcodr/jellyfin-plugins/main/10.11/manifest.json"
-    if ! grep -qF "$enhanced_repo_url" "$system_xml"; then
-        echo "$(date '+%H:%M:%S') - Adding Enhanced plugin repository"
-        sed -i 's|  </PluginRepositories>|    <RepositoryInfo>\n      <Name>n00bcodr repo</Name>\n      <Url>'"$enhanced_repo_url"'</Url>\n      <Enabled>true</Enabled>\n    </RepositoryInfo>\n  </PluginRepositories>|' "$system_xml"
-    else
-        echo "$(date '+%H:%M:%S') - Enhanced plugin repository already exists, skipping..."
     fi
 
     # Add IAmParadox repository if not present (check using full URL)
