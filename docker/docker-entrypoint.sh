@@ -215,6 +215,51 @@ setup_plugins() {
         fi
     fi
 
+    # Install/upgrade the custom Moonbase plugin (Moonbase_Taco)
+    local moonbase_version=$(grep -oP 'MOONBASE_VERSION=\K.*' /etc/environment 2>/dev/null)
+    if [ -n "$moonbase_version" ]; then
+        local mb_source_dir="/jellyfin/plugins/Moonbase_Taco_${moonbase_version}"
+        local mb_target_dir="/config/plugins/Moonbase_Taco_${moonbase_version}"
+        local mb_installed=$(get_installed_version "Moonbase_Taco")
+
+        # Remove any catalog-installed Moonbase (its folder has no version suffix).
+        if [ -d "/config/plugins/Moonbase" ]; then
+            echo "$(date '+%H:%M:%S') - Removing catalog-installed Moonbase plugin (superseded by Moonbase_Taco)..."
+            rm -rf /config/plugins/Moonbase
+        fi
+
+        if [ -n "$mb_installed" ]; then
+            if version_gt "$moonbase_version" "$mb_installed"; then
+                echo "$(date '+%H:%M:%S') - Newer Moonbase version available ($moonbase_version > $mb_installed), updating..."
+                rm -rf /config/plugins/Moonbase_Taco_* 2>/dev/null || true
+                if [ -d "$mb_source_dir" ]; then
+                    mkdir -p "$mb_target_dir"
+                    cp -r "$mb_source_dir"/* "$mb_target_dir/"
+                    chmod -R 755 "$mb_target_dir"
+                    validate_meta_json "$mb_target_dir"
+                    echo "$(date '+%H:%M:%S') - Moonbase plugin updated to version $moonbase_version"
+                else
+                    echo "$(date '+%H:%M:%S') - Warning: Moonbase plugin source not found at $mb_source_dir"
+                    all_success=false
+                fi
+            else
+                echo "$(date '+%H:%M:%S') - Moonbase plugin version $mb_installed already installed (>= $moonbase_version), skipping..."
+            fi
+        else
+            echo "$(date '+%H:%M:%S') - Installing Moonbase plugin version: $moonbase_version"
+            if [ -d "$mb_source_dir" ]; then
+                mkdir -p "$mb_target_dir"
+                cp -r "$mb_source_dir"/* "$mb_target_dir/"
+                chmod -R 755 "$mb_target_dir"
+                validate_meta_json "$mb_target_dir"
+                echo "$(date '+%H:%M:%S') - Moonbase plugin installed successfully"
+            else
+                echo "$(date '+%H:%M:%S') - Warning: Moonbase plugin not found at $mb_source_dir"
+                all_success=false
+            fi
+        fi
+    fi
+
     if [ "$all_success" = false ]; then
         echo "$(date '+%H:%M:%S') - Warning: Some plugins failed to install. Container will continue but plugins may not work."
         return 1

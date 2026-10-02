@@ -108,6 +108,47 @@ RUN dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFI
     -p:DebugSymbols=false -p:DebugType=none
 
 #
+# Build the Moonfin web app (Flutter) for the Moonbase plugin
+#
+FROM ghcr.io/cirruslabs/flutter:stable AS moonfin-web
+
+ARG MOONFIN_WEB_REPO=http://10.10.10.220:3000/soultaco83/moonfin-core.git
+
+WORKDIR /src
+RUN git config --global --add safe.directory /src \
+ && git clone --depth 1 ${MOONFIN_WEB_REPO} .
+RUN flutter pub get \
+ && flutter build web --wasm --release --base-href "/Moonfin/Web/"
+
+#
+# Build the Moonbase plugin (Jellyfin) from source, bundling the web app
+#
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS moonbase
+
+ARG MOONBASE_REPO=http://10.10.10.220:3000/soultaco83/Moonbase_Taco.git
+ARG MOONBASE_VERSION=3.0.0.0
+
+WORKDIR /src
+RUN git config --global --add safe.directory /src \
+ && git clone --depth 1 ${MOONBASE_REPO} .
+
+# Bundle the Flutter web output into the plugin's frontend directory
+COPY --from=moonfin-web /src/build/web/ ./Jellyfin/frontend/
+COPY --from=moonfin-web /src/web/theme/ ./Jellyfin/frontend/theme/
+
+RUN dotnet publish Jellyfin/backend/Moonfin.Server.csproj \
+    -c Release \
+    -o /plugin \
+    -p:AssemblyVersion=${MOONBASE_VERSION} \
+    -p:FileVersion=${MOONBASE_VERSION} \
+    -p:Version=${MOONBASE_VERSION}
+
+# Assemble the plugin folder: DLL + bundled dependencies + web assets + metadata
+RUN mkdir -p /plugin/frontend \
+ && cp -R Jellyfin/frontend/. /plugin/frontend/ \
+ && printf '{\n  "category": "General",\n  "guid": "8c5d0e91-4f2a-4b6d-9e3f-1a7c8d9e0f2b",\n  "name": "Moonbase",\n  "version": "%s",\n  "targetAbi": "10.10.0.0",\n  "assemblies": ["Moonfin.Server.dll"]\n}\n' "${MOONBASE_VERSION}" > /plugin/meta.json
+
+#
 # Build the final combined image
 #
 FROM --platform=linux/${TARGET_ARCH} debian:${OS_VERSION}-slim AS combined
@@ -315,6 +356,12 @@ RUN apt-get update \
  && apt-get clean autoclean --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
  && rm /tmp/install-plugins.py
+
+# Bundle the custom Moonbase plugin (Moonbase_Taco). The entrypoint installs it
+# into /config/plugins on first boot and upgrades over any older Moonbase build.
+ARG MOONBASE_VERSION=3.0.0.0
+COPY --from=moonbase /plugin /jellyfin/plugins/Moonbase_Taco_${MOONBASE_VERSION}
+RUN echo "MOONBASE_VERSION=${MOONBASE_VERSION}" >> /etc/environment
 
 # Copy entrypoint
 COPY docker/docker-entrypoint.sh /usr/local/bin/
