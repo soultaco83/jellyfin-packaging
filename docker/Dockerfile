@@ -110,14 +110,28 @@ RUN dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFI
 #
 # Build the Moonfin web app (Flutter) for the Moonbase plugin
 #
-FROM ghcr.io/cirruslabs/flutter:stable AS moonfin-web
+FROM debian:${OS_VERSION}-slim AS moonfin-web
 
 ARG MOONFIN_WEB_REPO=http://10.10.10.220:3000/soultaco83/moonfin-core.git
+ARG FLUTTER_VERSION=3.47.6
+
+# Install the Flutter SDK (bundles the matching Dart SDK). Moonfin needs Flutter >= 3.47.
+RUN apt-get update \
+ && apt-get install --no-install-recommends --no-install-suggests --yes \
+    ca-certificates curl git xz-utils \
+ && curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz" \
+      -o /tmp/flutter.tar.xz \
+ && tar xf /tmp/flutter.tar.xz -C /opt \
+ && rm /tmp/flutter.tar.xz \
+ && apt-get clean autoclean --yes \
+ && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
+ENV PATH="/opt/flutter/bin:${PATH}"
 
 WORKDIR /src
 RUN git config --global --add safe.directory /src \
  && git clone --depth 1 ${MOONFIN_WEB_REPO} .
-RUN flutter pub get \
+RUN flutter config --no-analytics \
+ && flutter pub get \
  && flutter build web --wasm --release --base-href "/Moonfin/Web/"
 
 #
