@@ -123,6 +123,8 @@ RUN apt-get update \
       -o /tmp/flutter.tar.xz \
  && tar xf /tmp/flutter.tar.xz -C /opt \
  && rm /tmp/flutter.tar.xz \
+ && chown -R root:root /opt/flutter \
+ && git config --global --add safe.directory /opt/flutter \
  && apt-get clean autoclean --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
 ENV PATH="/opt/flutter/bin:${PATH}"
