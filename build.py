@@ -21,7 +21,7 @@ revparse = run(["git", "rev-parse", "--show-toplevel"], stdout=PIPE)
 repo_root_dir = revparse.stdout.decode().strip()
 
 # Base Docker commands
-docker_build_cmd = "docker buildx build --progress=plain --no-cache"
+docker_build_cmd = "docker buildx build --progress=plain"
 docker_run_cmd = "docker run --rm"
 
 
@@ -739,8 +739,12 @@ parser.add_argument('build_arch', default=None, nargs='?', help='The build archi
 parser.add_argument('build_version', default=None, nargs='?', help='The build release version [debian/ubuntu only]')
 parser.add_argument('--local', action='store_true', help='Local build, do not generate manifests or push them [docker only]')
 parser.add_argument('--debug', action='store_true', help='Debug build, set .NET to use Debug instead of Release')
+parser.add_argument('--no-cache', action='store_true', help='Disable Docker layer cache and force a full rebuild')
 
 args = parser.parse_args()
+
+if args.no_cache:
+    docker_build_cmd += " --no-cache"
 
 jellyfin_version = args.jellyfin_version
 build_type = args.build_type

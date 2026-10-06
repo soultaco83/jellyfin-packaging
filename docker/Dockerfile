@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 # Docker build arguments
 ARG DOTNET_VERSION=10.0
 ARG NODEJS_VERSION=24
@@ -66,10 +68,12 @@ RUN apk add \
  && git config --global --add safe.directory /jellyfin/jellyfin-web
 
 WORKDIR ${SOURCE_DIR}
+# Copy only the manifests first so the dependency install layer is cached
+# independently of source changes.
+COPY jellyfin-web/package.json jellyfin-web/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --unsafe-perm
 COPY jellyfin-web .
-
-RUN npm ci --no-audit --unsafe-perm \
- && npm run build:production \
+RUN npm run build:production \
  && mv dist ${ARTIFACT_DIR}
 
 #
@@ -103,66 +107,10 @@ RUN apt-get update \
     libicu76 \
  && curl -fsSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel ${DOTNET_VERSION} --install-dir /usr/local/bin
 
-RUN dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFIG} \
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    dotnet publish Jellyfin.Server --arch ${DOTNET_ARCH} --configuration ${CONFIG} \
     --output="${ARTIFACT_DIR}" --self-contained \
     -p:DebugSymbols=false -p:DebugType=none
-
-#
-# Build the Moonfin web app (Flutter) for the Moonbase plugin
-#
-FROM debian:${OS_VERSION}-slim AS moonfin-web
-
-ARG MOONFIN_WEB_REPO=http://10.10.10.220:3000/soultaco83/moonfin-core.git
-ARG FLUTTER_VERSION=3.47.6
-
-# Install the Flutter SDK (bundles the matching Dart SDK). Moonfin needs Flutter >= 3.47.
-RUN apt-get update \
- && apt-get install --no-install-recommends --no-install-suggests --yes \
-    ca-certificates curl git xz-utils \
- && curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz" \
-      -o /tmp/flutter.tar.xz \
- && tar xf /tmp/flutter.tar.xz -C /opt \
- && rm /tmp/flutter.tar.xz \
- && chown -R root:root /opt/flutter \
- && git config --global --add safe.directory /opt/flutter \
- && apt-get clean autoclean --yes \
- && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/*
-ENV PATH="/opt/flutter/bin:${PATH}"
-
-WORKDIR /src
-RUN git config --global --add safe.directory /src \
- && git clone --depth 1 ${MOONFIN_WEB_REPO} .
-RUN flutter config --no-analytics \
- && flutter pub get \
- && flutter build web --wasm --release --base-href "/Moonfin/Web/"
-
-#
-# Build the Moonbase plugin (Jellyfin) from source, bundling the web app
-#
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS moonbase
-
-ARG MOONBASE_REPO=http://10.10.10.220:3000/soultaco83/Moonbase_Taco.git
-ARG MOONBASE_VERSION=3.0.0.0
-
-WORKDIR /src
-RUN git config --global --add safe.directory /src \
- && git clone --depth 1 ${MOONBASE_REPO} .
-
-# Bundle the Flutter web output into the plugin's frontend directory
-COPY --from=moonfin-web /src/build/web/ ./Jellyfin/frontend/
-COPY --from=moonfin-web /src/web/theme/ ./Jellyfin/frontend/theme/
-
-RUN dotnet publish Jellyfin/backend/Moonfin.Server.csproj \
-    -c Release \
-    -o /plugin \
-    -p:AssemblyVersion=${MOONBASE_VERSION} \
-    -p:FileVersion=${MOONBASE_VERSION} \
-    -p:Version=${MOONBASE_VERSION}
-
-# Assemble the plugin folder: DLL + bundled dependencies + web assets + metadata
-RUN mkdir -p /plugin/frontend \
- && cp -R Jellyfin/frontend/. /plugin/frontend/ \
- && printf '{\n  "category": "General",\n  "guid": "8c5d0e91-4f2a-4b6d-9e3f-1a7c8d9e0f2b",\n  "name": "Moonbase",\n  "version": "%s",\n  "targetAbi": "10.10.0.0",\n  "assemblies": ["Moonfin.Server.dll"]\n}\n' "${MOONBASE_VERSION}" > /plugin/meta.json
 
 #
 # Build the final combined image
@@ -372,12 +320,6 @@ RUN apt-get update \
  && apt-get clean autoclean --yes \
  && rm -rf /var/cache/apt/archives* /var/lib/apt/lists/* \
  && rm /tmp/install-plugins.py
-
-# Bundle the custom Moonbase plugin (Moonbase_Taco). The entrypoint installs it
-# into /config/plugins on first boot and upgrades over any older Moonbase build.
-ARG MOONBASE_VERSION=3.0.0.0
-COPY --from=moonbase /plugin /jellyfin/plugins/Moonbase_Taco_${MOONBASE_VERSION}
-RUN echo "MOONBASE_VERSION=${MOONBASE_VERSION}" >> /etc/environment
 
 # Copy entrypoint
 COPY docker/docker-entrypoint.sh /usr/local/bin/

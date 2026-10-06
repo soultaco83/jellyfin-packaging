@@ -1,0 +1,11 @@
+.git
+**/.git
+**/node_modules
+**/bin
+**/obj
+**/out
+**/*.log
+**/*.user
+**/.vs
+**/.vscode
+.DS_Store
